@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.venv/
+credenciais/
+src/.claude/
+
+# dados/ é estado de execução (roteiros, fila, histórico, mídia
+# gerada) — recriado automaticamente pelos scripts, não é código.
+dados/

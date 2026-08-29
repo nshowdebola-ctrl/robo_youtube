@@ -1,0 +1,10 @@
+feedparser==6.0.14
+requests==2.34.2
+beautifulsoup4==4.15.0
+ollama==0.6.2
+edge-tts==7.2.8
+pillow==12.3.0
+google-api-python-client==2.199.0
+google-auth==2.57.0
+google-auth-httplib2==0.4.2
+google-auth-oauthlib==1.4.1
