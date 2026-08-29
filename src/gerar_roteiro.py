@@ -790,16 +790,36 @@ TEXTO DA MATÉRIA:
 
 def gerar_titulo_youtube(
     titulo_original,
-    texto
+    texto,
+    publicador=""
 ):
     """
     Título determinístico: usa o próprio título original
-    da notícia (sem chamar IA).
+    da notícia (sem chamar IA), removendo o sufixo
+    " - Veículo" que o Google Notícias acrescenta (senão o
+    vídeo parece ser do veículo original, não do canal).
     """
 
-    return limpar(
+    titulo = limpar(
         titulo_original
     )
+
+    publicador = limpar(
+        publicador
+    )
+
+    sufixo = f" - {publicador}"
+
+    if (
+        publicador
+        and titulo.lower().endswith(sufixo.lower())
+    ):
+
+        titulo = titulo[
+            : -len(sufixo)
+        ].strip()
+
+    return titulo
 
 
 # ============================================================
@@ -1019,6 +1039,10 @@ def gerar_roteiro_para_noticia(noticia, indice):
         noticia.get("fonte")
     ) or "Google Notícias"
 
+    publicador = limpar(
+        noticia.get("publicador")
+    )
+
     url = (
         noticia.get("url")
         or noticia.get("link")
@@ -1152,7 +1176,8 @@ def gerar_roteiro_para_noticia(noticia, indice):
     titulo_youtube = (
         gerar_titulo_youtube(
             titulo_original,
-            texto
+            texto,
+            publicador
         )
     )
 

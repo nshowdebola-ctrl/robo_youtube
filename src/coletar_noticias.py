@@ -217,6 +217,22 @@ def formatar_data(data):
 # COLETAR UM FEED
 # ============================================================
 
+def extrair_publicador(item):
+    """
+    Nome do veículo original de uma entrada de RSS (ex.:
+    "ESPN Brasil", "ge"). O Google Notícias expõe isso no
+    campo <source> de cada item; feeds diretos (ex.: UOL) não
+    têm esse campo, e nesse caso retorna "".
+    """
+
+    fonte = item.get("source")
+
+    if isinstance(fonte, dict):
+        return str(fonte.get("title", "") or "").strip()
+
+    return ""
+
+
 def coletar_feed(nome, url):
 
     print(
@@ -292,6 +308,16 @@ def coletar_feed(nome, url):
                 "data": data,
 
                 "fonte": nome,
+
+                # Nome do veículo original (ex.: "ESPN Brasil",
+                # "ge"). O Google Notícias sempre acrescenta
+                # " - Veículo" no final do título — guardamos
+                # esse nome à parte pra poder tirar o sufixo do
+                # título usado no YouTube (senão o vídeo parece
+                # ser do veículo, não do canal).
+                "publicador": extrair_publicador(
+                    item
+                ),
 
                 "resumo": item.get(
                     "summary",
