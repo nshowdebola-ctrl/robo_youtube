@@ -33,6 +33,7 @@ from gerar_video import (
     pontuar_candidata,
     baixar_imagem,
 )
+from gerar_roteiro import limitar_texto
 
 
 # ============================================================================
@@ -707,16 +708,16 @@ def gerar_video_short(resultado, indice, arquivo_audio, arquivo_imagem):
 # FALLBACK — SHORT A PARTIR DA NOTÍCIA DO VÍDEO LONGO
 #
 # Quando não há resultado de jogo com placar identificável, em vez de
-# não publicar nada nesse horário, reaproveitamos a notícia mais recente
-# já publicada pelo pipeline principal (áudio e imagem já prontos) num
-# card vertical de manchete. Só LÊ arquivos que o vídeo longo já gerou —
-# não mexe em nada do pipeline principal nem no timing/render do Short
-# de placar (gerar_video_short fica intocado; o ffmpeg abaixo é uma
-# cópia dele, só trocando o frame de entrada).
+# não publicar nada nesse horário, reaproveitamos o título e a imagem
+# da notícia mais recente já publicada pelo pipeline principal, com
+# uma narração curta própria, num card vertical de manchete. Só LÊ
+# arquivos que o vídeo longo já gerou — não mexe em nada do pipeline
+# principal nem no timing/render do Short de placar (gerar_video_short
+# fica intocado; o ffmpeg abaixo é uma cópia dele, só trocando o frame
+# de entrada).
 # ============================================================================
 
 NOTICIAS_ROTEIROS_DIR = BASE_DIR / "dados" / "roteiros"
-NOTICIAS_AUDIOS_DIR = BASE_DIR / "dados" / "audios"
 NOTICIAS_IMAGENS_DIR = BASE_DIR / "dados" / "imagens"
 NOTICIAS_STATUS_YOUTUBE_FILE = BASE_DIR / "dados" / "status" / "youtube.json"
 
@@ -724,7 +725,11 @@ NOTICIAS_STATUS_YOUTUBE_FILE = BASE_DIR / "dados" / "status" / "youtube.json"
 def _ultima_noticia_publicada():
     """
     Maior índice de notícia_N já publicado no vídeo longo, com
-    áudio e imagem disponíveis pra reaproveitar no Short.
+    roteiro e imagem disponíveis pra reaproveitar no Short. O
+    áudio do vídeo longo (~50-70s) NÃO é reaproveitado — o
+    Short grava uma narração curta própria (ver
+    _texto_narracao_fallback), pra ficar na mesma faixa de
+    duração do Short de placar (20 a 30s).
     """
 
     status_youtube = carregar_json(NOTICIAS_STATUS_YOUTUBE_FILE)
@@ -742,17 +747,12 @@ def _ultima_noticia_publicada():
     for n in sorted(indices, reverse=True):
 
         roteiro_path = NOTICIAS_ROTEIROS_DIR / f"noticia_{n}.json"
-        audio_path = NOTICIAS_AUDIOS_DIR / f"noticia_{n}.mp3"
         imagem_path = NOTICIAS_IMAGENS_DIR / f"noticia_{n}.jpg"
 
-        if (
-            roteiro_path.exists()
-            and audio_path.exists()
-            and imagem_path.exists()
-        ):
-            return n, roteiro_path, audio_path, imagem_path
+        if roteiro_path.exists() and imagem_path.exists():
+            return n, roteiro_path, imagem_path
 
-    return None, None, None, None
+    return None, None, None
 
 
 def _noticia_ja_usada_no_fallback(indice_noticia):
@@ -931,59 +931,44 @@ def preparar_frame_noticia(arquivo_imagem, titulo, indice):
 
 
 # Mesma frase de encerramento usada no Short de placar (ver
-# montar_roteiro_short) — aqui precisa ser gravada à parte e
-# colada no final, porque o áudio reaproveitado do vídeo longo
-# não tem esse CTA de assinatura.
+# montar_roteiro_short).
 FRASE_ENCERRAMENTO_FALLBACK = (
     "Inscreva-se e acesse o canal para ver mais "
     "conteúdos como este."
 )
 
+# 20 a 30s na voz usada (~14,4 caracteres/s) — mesma faixa de
+# duração do Short de placar.
+MIN_CHARS_FALLBACK = 288
+MAX_CHARS_FALLBACK = 432
 
-def _audio_com_encerramento(audio_original, indice):
+
+def _texto_narracao_fallback(titulo):
     """
-    Grava a frase de encerramento à parte e concatena no final
-    do áudio já pronto (reaproveitado do vídeo longo), sem
-    alterar o arquivo original.
+    Narração curta e genérica pro Short de fallback — só usa o
+    título (fato/manchete, sem problema de direitos autorais),
+    igual ao fallback_roteiro() do vídeo longo, sem citar o
+    corpo da matéria. Mantida independente do vídeo longo pra
+    poder controlar a duração (20-30s) sem depender do tamanho
+    da narração completa dele.
     """
 
-    outro = AUDIOS_DIR / f"resultado_{indice}_outro.mp3"
-
-    gerar_audio(
-        FRASE_ENCERRAMENTO_FALLBACK,
-        outro,
+    texto = (
+        f"Mais uma notícia do futebol brasileiro. "
+        f"{titulo}. "
+        f"Esse assunto tem repercutido bastante entre "
+        f"torcedores e deve continuar rendendo comentário "
+        f"nas próximas horas. "
+        f"Fique de olho nas atualizações, porque coisas "
+        f"assim costumam mudar rápido no mundo da bola. "
+        f"{FRASE_ENCERRAMENTO_FALLBACK}"
     )
 
-    combinado = AUDIOS_DIR / f"resultado_{indice}.mp3"
-
-    comando = [
-        "ffmpeg", "-y",
-        "-i", str(audio_original),
-        "-i", str(outro),
-        "-filter_complex",
-        "[0:a][1:a]concat=n=2:v=0:a=1[a]",
-        "-map", "[a]",
-        str(combinado),
-    ]
-
-    resultado_ffmpeg = subprocess.run(
-        comando,
-        capture_output=True,
-        text=True,
-        timeout=60,
+    return limitar_texto(
+        texto,
+        MIN_CHARS_FALLBACK,
+        MAX_CHARS_FALLBACK,
     )
-
-    outro.unlink(missing_ok=True)
-
-    if resultado_ffmpeg.returncode != 0:
-
-        print(resultado_ffmpeg.stderr[-2000:])
-
-        raise RuntimeError(
-            "Falha ao concatenar a frase de encerramento."
-        )
-
-    return combinado
 
 
 def gerar_video_noticia_short(frame, indice, arquivo_audio):
@@ -1060,16 +1045,16 @@ def gerar_video_noticia_short(frame, indice, arquivo_audio):
 def gerar_fallback_de_noticia():
     """
     Quando não há resultado de jogo com placar pra publicar,
-    reaproveita a notícia mais recente já publicada no vídeo
-    longo (áudio e imagem já prontos) e gera um Short de
-    manchete a partir dela, em vez de não publicar nada nesse
-    horário.
+    reaproveita o título e a imagem da notícia mais recente já
+    publicada no vídeo longo e gera um Short de manchete com
+    narração curta própria (20-30s), em vez de não publicar
+    nada nesse horário.
 
     Retorna o índice do resultado_N gerado, ou None se não
     havia notícia nova disponível pra reaproveitar.
     """
 
-    indice_noticia, roteiro_path, audio_path, imagem_path = (
+    indice_noticia, roteiro_path, imagem_path = (
         _ultima_noticia_publicada()
     )
 
@@ -1121,12 +1106,14 @@ def gerar_fallback_de_noticia():
             imagem_path, titulo, indice
         )
 
-        audio_final = _audio_com_encerramento(
-            audio_path, indice
-        )
+        texto_narracao = _texto_narracao_fallback(titulo)
+
+        audio_path = AUDIOS_DIR / f"resultado_{indice}.mp3"
+
+        gerar_audio(texto_narracao, audio_path)
 
         gerar_video_noticia_short(
-            frame, indice, audio_final
+            frame, indice, audio_path
         )
 
         titulo_youtube = f"{titulo} #Shorts"
