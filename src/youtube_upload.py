@@ -41,7 +41,7 @@ CREDENCIAIS_DIR = BASE_DIR / "credenciais"
 CLIENT_SECRET_FILE = CREDENCIAIS_DIR / "client_secret.json"
 TOKEN_FILE = CREDENCIAIS_DIR / "token.json"
 
-SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
+SCOPES = ["https://www.googleapis.com/auth/youtube"]
 
 # 17 = Sports, categoria padrão do YouTube.
 CATEGORIA_ESPORTES = "17"
