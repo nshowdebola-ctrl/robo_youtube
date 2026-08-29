@@ -842,11 +842,23 @@ def gerar_tags(
         titulo
     )
 
+    # Base fixa (~205 caracteres com separadores) — o restante
+    # do orçamento de 495 caracteres do YouTube fica pras
+    # palavras extraídas do título, abaixo.
     tags = [
         "futebol",
         "notícias de futebol",
+        "futebol hoje",
+        "notícias futebol",
         "mercado da bola",
-        "Noticias Show de Bola",
+        "transferências",
+        "futebol brasileiro",
+        "Brasileirão",
+        "notícias esportivas",
+        "futebol ao vivo",
+        "últimas notícias",
+        "notícias de hoje",
+        "futebol mundial",
     ]
 
     for palavra in palavras:
