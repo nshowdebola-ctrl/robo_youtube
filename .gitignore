@@ -3,6 +3,7 @@ __pycache__/
 .venv/
 credenciais/
 src/.claude/
+.git-token
 
 # dados/ é estado de execução (roteiros, fila, histórico, mídia
 # gerada) — recriado automaticamente pelos scripts, não é código.
