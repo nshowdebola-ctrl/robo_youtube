@@ -864,7 +864,9 @@ def gerar_tags(
             palavra
         )
 
-    return tags[:18]
+    # Sem teto de quantidade aqui: quem limita de verdade é o
+    # envio pro YouTube, por caracteres (ver youtube_upload.py).
+    return tags
 
 
 # ============================================================

@@ -117,6 +117,30 @@ def autenticar():
 # UPLOAD
 # ============================================================
 
+# O YouTube limita as tags pela soma dos caracteres de todas
+# juntas (separadas por vírgula), não pela quantidade de tags.
+# Usamos 495 em vez de 500 pra sobrar uma margem de segurança.
+LIMITE_CARACTERES_TAGS = 495
+
+
+def _limitar_tags_por_caracteres(tags, limite=LIMITE_CARACTERES_TAGS):
+
+    selecionadas = []
+    total = 0
+
+    for tag in tags:
+
+        acrescimo = len(tag) + (1 if selecionadas else 0)
+
+        if total + acrescimo > limite:
+            break
+
+        selecionadas.append(tag)
+        total += acrescimo
+
+    return selecionadas
+
+
 def enviar_video(
     youtube,
     caminho_video,
@@ -136,7 +160,7 @@ def enviar_video(
         "snippet": {
             "title": titulo[:100],
             "description": descricao[:5000],
-            "tags": tags[:500],
+            "tags": _limitar_tags_por_caracteres(tags),
             "categoryId": category_id,
         },
 
