@@ -172,8 +172,8 @@ def montar_roteiro_short(resultado, indice):
     )
 
     fechamento = (
-        "Inscreva-se no canal para acompanhar todos os "
-        "resultados do dia."
+        "Inscreva-se e acesse o canal para ver mais "
+        "conteúdos como este."
     )
 
     texto = (
@@ -930,6 +930,62 @@ def preparar_frame_noticia(arquivo_imagem, titulo, indice):
     return destino
 
 
+# Mesma frase de encerramento usada no Short de placar (ver
+# montar_roteiro_short) — aqui precisa ser gravada à parte e
+# colada no final, porque o áudio reaproveitado do vídeo longo
+# não tem esse CTA de assinatura.
+FRASE_ENCERRAMENTO_FALLBACK = (
+    "Inscreva-se e acesse o canal para ver mais "
+    "conteúdos como este."
+)
+
+
+def _audio_com_encerramento(audio_original, indice):
+    """
+    Grava a frase de encerramento à parte e concatena no final
+    do áudio já pronto (reaproveitado do vídeo longo), sem
+    alterar o arquivo original.
+    """
+
+    outro = AUDIOS_DIR / f"resultado_{indice}_outro.mp3"
+
+    gerar_audio(
+        FRASE_ENCERRAMENTO_FALLBACK,
+        outro,
+    )
+
+    combinado = AUDIOS_DIR / f"resultado_{indice}.mp3"
+
+    comando = [
+        "ffmpeg", "-y",
+        "-i", str(audio_original),
+        "-i", str(outro),
+        "-filter_complex",
+        "[0:a][1:a]concat=n=2:v=0:a=1[a]",
+        "-map", "[a]",
+        str(combinado),
+    ]
+
+    resultado_ffmpeg = subprocess.run(
+        comando,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+    outro.unlink(missing_ok=True)
+
+    if resultado_ffmpeg.returncode != 0:
+
+        print(resultado_ffmpeg.stderr[-2000:])
+
+        raise RuntimeError(
+            "Falha ao concatenar a frase de encerramento."
+        )
+
+    return combinado
+
+
 def gerar_video_noticia_short(frame, indice, arquivo_audio):
     """
     Monta o vídeo com o MESMO timing/render de gerar_video_short
@@ -1065,8 +1121,12 @@ def gerar_fallback_de_noticia():
             imagem_path, titulo, indice
         )
 
+        audio_final = _audio_com_encerramento(
+            audio_path, indice
+        )
+
         gerar_video_noticia_short(
-            frame, indice, audio_path
+            frame, indice, audio_final
         )
 
         titulo_youtube = f"{titulo} #Shorts"
