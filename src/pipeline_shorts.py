@@ -70,7 +70,19 @@ def main():
         print()
         print(
             f"{YELLOW}ℹ️ Nenhum resultado novo identificável "
-            f"nesta janela. Nada a gerar nesta execução.{RESET}"
+            f"nesta janela. Tentando fallback com a notícia "
+            f"do vídeo longo...{RESET}"
+        )
+
+        caminho_video = SRC_DIR / "gerar_short.py"
+
+        subprocess.run(
+            [
+                sys.executable,
+                str(caminho_video),
+                "--fallback-noticia",
+            ],
+            cwd=str(BASE_DIR),
         )
 
         return 0
