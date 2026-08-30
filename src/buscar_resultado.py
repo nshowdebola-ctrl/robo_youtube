@@ -121,38 +121,41 @@ _VERBOS_VITORIA = (
     r"superou|supera|atropelou|atropela|goleou|goleia"
 )
 
+# NOTA: nenhum destes padrões usa re.IGNORECASE global — isso
+# anularia a exigência de maiúscula em _TIME e deixaria qualquer
+# palavra minúscula (ex.: apelido de time usado em minúsculo no
+# corpo da notícia) ser capturada como nome de time. A
+# insensibilidade a caixa fica só nos grupos (?i:...) abaixo,
+# em cima de verbos/conectores — nunca em _TIME.
+
 _PADRAO_VENCEDOR = re.compile(
     _TIME
-    + r"\s+(?:"
+    + r"\s+(?i:"
     + _VERBOS_VITORIA
-    + r")\s+(?:o|a)?\s*"
+    + r")\s+(?i:o|a)?\s*"
     + _TIME
-    + r"\s+por\s+(\d+)\s*[ax]\s*(\d+)",
-    re.IGNORECASE,
+    + r"\s+(?i:por)\s+(\d+)\s*(?i:[ax])\s*(\d+)"
 )
 
 _PADRAO_PERDEDOR = re.compile(
     _TIME
-    + r"\s+perde[u]?\s+para\s+(?:o|a)?\s*"
+    + r"\s+(?i:perde[u]?\s+para)\s+(?i:o|a)?\s*"
     + _TIME
-    + r"\s+por\s+(\d+)\s*[ax]\s*(\d+)",
-    re.IGNORECASE,
+    + r"\s+(?i:por)\s+(\d+)\s*(?i:[ax])\s*(\d+)"
 )
 
 _PADRAO_EMPATE_SEM_GOLS = re.compile(
     _TIME
-    + r"\s+e\s+"
+    + r"\s+(?i:e)\s+"
     + _TIME
-    + r"\s+empata(?:ram|m)?\s+sem\s+gols",
-    re.IGNORECASE,
+    + r"\s+(?i:empata(?:ram|m)?\s+sem\s+gols)"
 )
 
 _PADRAO_EMPATE_PLACAR = re.compile(
     _TIME
-    + r"\s+e\s+"
+    + r"\s+(?i:e)\s+"
     + _TIME
-    + r"\s+empata(?:ram|m)?\s+(?:em|por)\s+(\d+)\s*[ax]\s*(\d+)",
-    re.IGNORECASE,
+    + r"\s+(?i:empata(?:ram|m)?\s+(?:em|por))\s+(\d+)\s*(?i:[ax])\s*(\d+)"
 )
 
 

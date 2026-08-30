@@ -52,6 +52,78 @@ STATUS_DIR = SHORTS_DIR / "status"
 
 STATUS_FILE = STATUS_DIR / "fila.json"
 
+# ============================================================================
+# AFILIADOS AMAZON — lista editável em afiliados.json (raiz do projeto),
+# revezados em sequência a cada Short gerado (placar ou fallback de
+# notícia, mesmo contador de índice), pra distribuir cliques igualmente
+# entre os produtos cadastrados.
+# ============================================================================
+
+AFILIADOS_FILE = BASE_DIR / "afiliados.json"
+
+DIVULGACAO_AFILIADO = (
+    "Como Associado Amazon, ganho com compras qualificadas."
+)
+
+
+def carregar_produtos_afiliados():
+
+    if not AFILIADOS_FILE.exists():
+        return []
+
+    try:
+
+        with AFILIADOS_FILE.open("r", encoding="utf-8") as arquivo:
+            produtos = json.load(arquivo)
+
+    except Exception as erro:
+
+        print(f"⚠️ Erro lendo {AFILIADOS_FILE.name}: {erro}")
+        return []
+
+    return [
+        produto for produto in produtos
+        if produto.get("nome") and produto.get("nome_curto")
+        and produto.get("link")
+    ]
+
+
+def produto_afiliado(indice):
+    """
+    Retorna o produto da vez (revezamento sequencial por índice do
+    Short), ou None se afiliados.json estiver vazio/ausente — nesse
+    caso o Short é gerado normalmente, só sem menção a produto.
+    """
+
+    produtos = carregar_produtos_afiliados()
+
+    if not produtos:
+        return None
+
+    return produtos[(int(indice) - 1) % len(produtos)]
+
+
+def bloco_descricao_afiliado(produto):
+
+    if not produto:
+        return ""
+
+    return (
+        f"🛒 {produto['nome']}: {produto['link']}\n"
+        f"{DIVULGACAO_AFILIADO}"
+    )
+
+
+def frase_narracao_afiliado(produto):
+
+    if not produto:
+        return ""
+
+    return (
+        f"Aliás, deixei o link pra comprar "
+        f"{produto['nome_curto']} na descrição do vídeo."
+    )
+
 W = 1080
 H = 1920
 
@@ -177,9 +249,14 @@ def montar_roteiro_short(resultado, indice):
         "conteúdos como este."
     )
 
-    texto = (
-        f"{abertura} {corpo} {desenvolvimento} "
-        f"{contexto} {fechamento}"
+    produto = produto_afiliado(indice)
+    mencao_afiliado = frase_narracao_afiliado(produto)
+
+    texto = " ".join(
+        parte for parte in (
+            abertura, corpo, desenvolvimento, contexto,
+            fechamento, mencao_afiliado,
+        ) if parte
     )
 
     titulo_tela = (
@@ -192,11 +269,14 @@ def montar_roteiro_short(resultado, indice):
 
     titulo_youtube = f"{titulo_tela} | Resultado #Shorts"
 
+    bloco_afiliado = bloco_descricao_afiliado(produto)
+
     descricao_youtube = (
         f"{corpo} "
         f"Confira o resultado no Noticias Show de Bola. "
         f"Inscreva-se para acompanhar todos os resultados do dia.\n\n"
-        f"#Shorts #futebol #resultados"
+        + (f"{bloco_afiliado}\n\n" if bloco_afiliado else "")
+        + f"#Shorts #futebol #resultados"
     )
 
     tags_youtube = [
@@ -938,12 +1018,14 @@ FRASE_ENCERRAMENTO_FALLBACK = (
 )
 
 # 20 a 30s na voz usada (~14,4 caracteres/s) — mesma faixa de
-# duração do Short de placar.
+# duração do Short de placar. Teto um pouco mais alto que os
+# 432 originais pra sobrar espaço pra menção ao afiliado sem
+# ela ser cortada pelo limitar_texto (fica na faixa de ~32s).
 MIN_CHARS_FALLBACK = 288
-MAX_CHARS_FALLBACK = 432
+MAX_CHARS_FALLBACK = 470
 
 
-def _texto_narracao_fallback(titulo):
+def _texto_narracao_fallback(titulo, produto):
     """
     Narração curta e genérica pro Short de fallback — só usa o
     título (fato/manchete, sem problema de direitos autorais),
@@ -961,7 +1043,8 @@ def _texto_narracao_fallback(titulo):
         f"nas próximas horas. "
         f"Fique de olho nas atualizações, porque coisas "
         f"assim costumam mudar rápido no mundo da bola. "
-        f"{FRASE_ENCERRAMENTO_FALLBACK}"
+        f"{FRASE_ENCERRAMENTO_FALLBACK} "
+        f"{frase_narracao_afiliado(produto)}"
     )
 
     return limitar_texto(
@@ -1106,7 +1189,9 @@ def gerar_fallback_de_noticia():
             imagem_path, titulo, indice
         )
 
-        texto_narracao = _texto_narracao_fallback(titulo)
+        produto = produto_afiliado(indice)
+
+        texto_narracao = _texto_narracao_fallback(titulo, produto)
 
         audio_path = AUDIOS_DIR / f"resultado_{indice}.mp3"
 
@@ -1118,8 +1203,12 @@ def gerar_fallback_de_noticia():
 
         titulo_youtube = f"{titulo} #Shorts"
 
+        bloco_afiliado = bloco_descricao_afiliado(produto)
+
         descricao_youtube = (
-            f"{descricao_base}\n\n#Shorts #futebol #noticias"
+            f"{descricao_base}\n\n"
+            + (f"{bloco_afiliado}\n\n" if bloco_afiliado else "")
+            + f"#Shorts #futebol #noticias"
         )
 
         tags_youtube = list(tags_base)[:15]
