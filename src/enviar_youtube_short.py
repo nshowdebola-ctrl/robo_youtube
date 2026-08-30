@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 
 from youtube_upload import autenticar, enviar_video
+from gerar_short import produto_afiliado, bloco_descricao_afiliado
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -98,6 +99,39 @@ def encontrar_proximo():
     return None, None, None
 
 
+def postar_comentario_afiliado(youtube, video_id, indice):
+    """
+    Posta (sem fixar — a API do YouTube não tem método pra
+    fixar comentário, só dá pra fazer manualmente no app/Studio)
+    um comentário com o mesmo produto/link afiliado usado na
+    descrição desse Short (mesmo produto_afiliado(indice), pra
+    ficar consistente com o que já foi escrito na descrição).
+    """
+
+    produto = produto_afiliado(indice)
+
+    if not produto:
+        return None
+
+    texto = bloco_descricao_afiliado(produto)
+
+    corpo = {
+        "snippet": {
+            "videoId": video_id,
+            "topLevelComment": {
+                "snippet": {"textOriginal": texto},
+            },
+        },
+    }
+
+    resposta = youtube.commentThreads().insert(
+        part="snippet",
+        body=corpo,
+    ).execute()
+
+    return resposta["id"]
+
+
 def main():
 
     print()
@@ -149,6 +183,28 @@ def main():
 
     print()
     print(f"✅ Publicado: {url}")
+
+    try:
+
+        indice = numero(chave)
+
+        comentario_id = postar_comentario_afiliado(
+            youtube, video_id, indice
+        )
+
+        if comentario_id:
+
+            print()
+            print("💬 Comentário com o link afiliado postado.")
+            print(
+                "📌 Falta só fixar: abra o vídeo, toque nos "
+                "3 pontinhos do seu comentário e escolha "
+                f"'Fixar'. {url}"
+            )
+
+    except Exception as erro:
+
+        print(f"⚠️ Não consegui postar o comentário afiliado: {erro}")
 
     status_youtube = carregar_json(STATUS_YOUTUBE_FILE)
 

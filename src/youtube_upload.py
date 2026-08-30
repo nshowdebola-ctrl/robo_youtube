@@ -41,7 +41,10 @@ CREDENCIAIS_DIR = BASE_DIR / "credenciais"
 CLIENT_SECRET_FILE = CREDENCIAIS_DIR / "client_secret.json"
 TOKEN_FILE = CREDENCIAIS_DIR / "token.json"
 
-SCOPES = ["https://www.googleapis.com/auth/youtube"]
+# force-ssl é superset de "youtube" (cobre upload/gestão) e é o
+# único scope aceito por commentThreads.insert — precisamos dele
+# pro comentário automático com o link afiliado.
+SCOPES = ["https://www.googleapis.com/auth/youtube.force-ssl"]
 
 # 17 = Sports, categoria padrão do YouTube.
 CATEGORIA_ESPORTES = "17"
