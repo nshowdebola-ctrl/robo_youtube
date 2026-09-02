@@ -125,6 +125,28 @@ def autenticar():
 # Usamos 495 em vez de 500 pra sobrar uma margem de segurança.
 LIMITE_CARACTERES_TAGS = 495
 
+# Limite real de título do YouTube.
+LIMITE_CARACTERES_TITULO = 100
+
+
+def _truncar_titulo(titulo, limite=LIMITE_CARACTERES_TITULO):
+    """
+    Corta o título respeitando o limite do YouTube sem quebrar
+    no meio de uma palavra (ex.: "...da Grécia. O jo").
+    """
+
+    titulo = titulo.strip()
+
+    if len(titulo) <= limite:
+        return titulo
+
+    reticencias = "…"
+
+    corte = titulo[: limite - len(reticencias)]
+    corte = corte.rsplit(" ", 1)[0].rstrip(" ,;:-")
+
+    return corte + reticencias
+
 
 def _limitar_tags_por_caracteres(tags, limite=LIMITE_CARACTERES_TAGS):
 
@@ -161,7 +183,7 @@ def enviar_video(
     corpo = {
 
         "snippet": {
-            "title": titulo[:100],
+            "title": _truncar_titulo(titulo),
             "description": descricao[:5000],
             "tags": _limitar_tags_por_caracteres(tags),
             "categoryId": category_id,

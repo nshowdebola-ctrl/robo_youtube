@@ -4,7 +4,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from ranking_noticias import normalizar_texto
+from ranking_noticias import normalizar_texto, similaridade
 
 
 # ============================================================
@@ -16,6 +16,17 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 HISTORICO_FILE = BASE_DIR / "dados" / "historico_noticias.json"
 
 DIAS_RETENCAO = 30
+
+# Mesmo limiar usado em ranking_noticias.py pra assunto repetido
+# dentro de uma rodada — aqui aplicado contra o histórico, pra
+# pegar o mesmo assunto vindo de fontes diferentes (títulos com
+# palavras distintas) em execuções separadas do robô.
+LIMIAR_SIMILARIDADE = 0.70
+
+# Só compara similaridade contra notícias usadas recentemente —
+# não faz sentido barrar um assunto novo só porque ele parece
+# com algo publicado há semanas.
+JANELA_SIMILARIDADE_HORAS = 48
 
 
 # ============================================================
@@ -119,10 +130,35 @@ def _link_noticia(noticia):
     ).strip()
 
 
+def _usada_ha_menos_de(item, horas):
+
+    try:
+
+        data_uso = datetime.fromisoformat(
+            item.get("data_uso", "")
+        )
+
+        if data_uso.tzinfo is None:
+            data_uso = data_uso.replace(
+                tzinfo=timezone.utc
+            )
+
+    except (ValueError, TypeError):
+        return False
+
+    limite = datetime.now(timezone.utc) - timedelta(
+        hours=horas
+    )
+
+    return data_uso >= limite
+
+
 def ja_usada(noticia, historico):
 
+    titulo = noticia.get("titulo", "")
+
     titulo_normalizado = normalizar_texto(
-        noticia.get("titulo", "")
+        titulo
     )
 
     link = _link_noticia(noticia)
@@ -136,6 +172,19 @@ def ja_usada(noticia, historico):
             return True
 
         if link and item.get("link") == link:
+            return True
+
+        # Mesmo assunto contado por um veículo diferente (título
+        # com palavras distintas) numa execução anterior recente
+        # — sem isso, "Arthur é reforço do Santos" e "Santos
+        # anuncia contratação de Arthur" passavam como notícias
+        # diferentes e geravam vídeos duplicados.
+        if (
+            titulo
+            and item.get("titulo")
+            and _usada_ha_menos_de(item, JANELA_SIMILARIDADE_HORAS)
+            and similaridade(titulo, item["titulo"]) >= LIMIAR_SIMILARIDADE
+        ):
             return True
 
     return False
