@@ -124,6 +124,49 @@ def frase_narracao_afiliado(produto):
         f"{produto['nome_curto']} na descrição do vídeo."
     )
 
+
+def desenhar_faixa_afiliado(draw, produto):
+    """
+    Faixa fixa acima do rodapé apontando pro link do produto na
+    descrição, visível o vídeo inteiro (não só quando a locução
+    menciona o produto, no fim do vídeo — a essa altura boa
+    parte de quem assiste já saiu). Sem emoji: a fonte usada
+    (DejaVu) não tem esses glifos e eles saem como um quadrado
+    vazio na tela.
+    """
+
+    if not produto:
+        return
+
+    faixa_y1 = H - 170
+    faixa_y2 = H - 110
+
+    draw.rectangle(
+        [0, faixa_y1, W, faixa_y2],
+        fill=(233, 39, 39, 235),
+    )
+
+    fonte_afiliado = ImageFont.truetype(str(FONT_BOLD), 28)
+    texto = "LINK DO PRODUTO NA DESCRIÇÃO"
+
+    caixa = draw.textbbox((0, 0), texto, font=fonte_afiliado)
+    largura_texto = caixa[2] - caixa[0]
+    altura_texto = caixa[3] - caixa[1]
+
+    x = (W - largura_texto) // 2
+    y = (
+        faixa_y1
+        + ((faixa_y2 - faixa_y1) - altura_texto) // 2
+        - caixa[1]
+    )
+
+    draw.text(
+        (x, y),
+        texto,
+        font=fonte_afiliado,
+        fill=(255, 255, 255, 255),
+    )
+
 W = 1080
 H = 1920
 
@@ -271,17 +314,33 @@ def montar_roteiro_short(resultado, indice):
 
     bloco_afiliado = bloco_descricao_afiliado(produto)
 
+    # Bloco do afiliado vem PRIMEIRO na descrição — o YouTube
+    # corta a descrição em ~2-3 linhas antes do "mostrar mais",
+    # e com o link só depois do resumo/inscreva-se ele ficava
+    # sempre atrás desse corte, invisível pra quase todo mundo.
     descricao_youtube = (
-        f"{corpo} "
+        (f"{bloco_afiliado}\n\n" if bloco_afiliado else "")
+        + f"{corpo} "
         f"Confira o resultado no Noticias Show de Bola. "
         f"Inscreva-se para acompanhar todos os resultados do dia.\n\n"
-        + (f"{bloco_afiliado}\n\n" if bloco_afiliado else "")
         + f"#Shorts #futebol #resultados"
     )
 
+    # Base fixa com ~290 caracteres (mesmo orçamento do
+    # pipeline principal) — antes a base era bem menor e o
+    # orçamento de 500 caracteres do YouTube ficava
+    # subaproveitado (ex.: vídeo saindo com só ~96 caracteres
+    # de tags).
     tags_youtube = [
-        "futebol", "resultados", "shorts", "futebol brasileiro",
-        "Noticias Show de Bola", time_a, time_b,
+        "futebol", "notícias de futebol", "futebol hoje",
+        "resultados", "placar de hoje", "futebol ao vivo",
+        "futebol brasileiro", "Brasileirão",
+        "campeonato brasileiro", "notícias esportivas",
+        "últimas notícias", "futebol mundial", "shorts",
+        "Noticias Show de Bola", "resumo de jogo",
+        "seleção brasileira", "gols de hoje",
+        "notícias de hoje", "esportes",
+        time_a, time_b,
     ]
 
     if competicao:
@@ -685,6 +744,8 @@ def preparar_frame_short(arquivo_imagem, resultado, indice):
             card_y2 + 30,
         )
 
+    desenhar_faixa_afiliado(draw, produto_afiliado(indice))
+
     # Rodapé.
     draw.rectangle([0, H - 110, W, H], fill=(3, 7, 11, 245))
     draw.rectangle([0, H - 110, W, H - 105], fill=(233, 39, 39, 255))
@@ -985,6 +1046,8 @@ def preparar_frame_noticia(arquivo_imagem, titulo, indice):
         fill=(255, 255, 255, 255),
     )
 
+    desenhar_faixa_afiliado(draw, produto_afiliado(indice))
+
     # Rodapé (igual ao card de placar).
     draw.rectangle([0, H - 110, W, H], fill=(3, 7, 11, 245))
     draw.rectangle([0, H - 110, W, H - 105], fill=(233, 39, 39, 255))
@@ -1205,13 +1268,19 @@ def gerar_fallback_de_noticia():
 
         bloco_afiliado = bloco_descricao_afiliado(produto)
 
+        # Mesma ordem do Short de placar: afiliado primeiro,
+        # antes do corte de "mostrar mais" da descrição.
         descricao_youtube = (
-            f"{descricao_base}\n\n"
-            + (f"{bloco_afiliado}\n\n" if bloco_afiliado else "")
+            (f"{bloco_afiliado}\n\n" if bloco_afiliado else "")
+            + f"{descricao_base}\n\n"
             + f"#Shorts #futebol #noticias"
         )
 
-        tags_youtube = list(tags_base)[:15]
+        # Sem teto de quantidade — quem limita de verdade é o
+        # envio pro YouTube, por caracteres (ver
+        # youtube_upload.py). Um teto de 15 tags aqui cortava
+        # boa parte do orçamento de 500 caracteres sem usar.
+        tags_youtube = list(tags_base)
 
         dados = {
 

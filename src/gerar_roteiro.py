@@ -788,6 +788,16 @@ TEXTO DA MATÉRIA:
 # GERAR TÍTULO PARA YOUTUBE
 # ============================================================
 
+# O pipeline principal agora grava vertical (ver W/H em
+# gerar_video.py) — precisa do "#Shorts" no título pra
+# competir na aba Shorts igual o pipeline de resultado, que
+# performa muito melhor (vídeo horizontal curto de antes não
+# era nem Short nem vídeo longo de verdade).
+SUFIXO_SHORTS = " #Shorts"
+
+LIMITE_TITULO_YOUTUBE = 100
+
+
 def gerar_titulo_youtube(
     titulo_original,
     texto,
@@ -797,7 +807,8 @@ def gerar_titulo_youtube(
     Título determinístico: usa o próprio título original
     da notícia (sem chamar IA), removendo o sufixo
     " - Veículo" que o Google Notícias acrescenta (senão o
-    vídeo parece ser do veículo original, não do canal).
+    vídeo parece ser do veículo original, não do canal), e
+    acrescenta "#Shorts" no final.
     """
 
     titulo = limpar(
@@ -819,7 +830,14 @@ def gerar_titulo_youtube(
             : -len(sufixo)
         ].strip()
 
-    return titulo
+    limite = LIMITE_TITULO_YOUTUBE - len(SUFIXO_SHORTS)
+
+    if len(titulo) > limite:
+
+        corte = titulo[:limite].rsplit(" ", 1)[0].rstrip(" ,;:-")
+        titulo = corte + "…"
+
+    return titulo + SUFIXO_SHORTS
 
 
 # ============================================================
@@ -840,13 +858,24 @@ def gerar_descricao(
         f"Confira os principais detalhes desta "
         f"notícia no Noticias Show de Bola. "
         f"Inscreva-se no canal para acompanhar "
-        f"as principais notícias do futebol."
+        f"as principais notícias do futebol.\n\n"
+        f"#Shorts #futebol #noticias"
     )
 
 
 # ============================================================
 # GERAR TAGS
 # ============================================================
+
+# Orçamento de tags do YouTube (495 caracteres, ver
+# youtube_upload.py) dividido em duas partes: ~290 caracteres
+# de base fixa relacionada a futebol/canal, e até ~200
+# caracteres reservados pras palavras específicas extraídas do
+# título de cada notícia — antes a base era só ~205 caracteres
+# e sobrava orçamento sem uso (ex.: um vídeo saindo com só 116
+# de 500 caracteres de tags).
+ORCAMENTO_TAGS_TITULO = 200
+
 
 def gerar_tags(
     titulo,
@@ -862,9 +891,7 @@ def gerar_tags(
         titulo
     )
 
-    # Base fixa (~205 caracteres com separadores) — o restante
-    # do orçamento de 495 caracteres do YouTube fica pras
-    # palavras extraídas do título, abaixo.
+    # Base fixa (~290 caracteres com separadores).
     tags = [
         "futebol",
         "notícias de futebol",
@@ -879,7 +906,14 @@ def gerar_tags(
         "últimas notícias",
         "notícias de hoje",
         "futebol mundial",
+        "shorts",
+        "Noticias Show de Bola",
+        "campeonato brasileiro",
+        "seleção brasileira",
+        "resumo de jogo",
     ]
+
+    orcamento_usado = 0
 
     for palavra in palavras:
 
@@ -892,12 +926,17 @@ def gerar_tags(
         ]:
             continue
 
+        acrescimo = len(palavra) + 1
+
+        if orcamento_usado + acrescimo > ORCAMENTO_TAGS_TITULO:
+            continue
+
         tags.append(
             palavra
         )
 
-    # Sem teto de quantidade aqui: quem limita de verdade é o
-    # envio pro YouTube, por caracteres (ver youtube_upload.py).
+        orcamento_usado += acrescimo
+
     return tags
 
 

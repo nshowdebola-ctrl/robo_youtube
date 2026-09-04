@@ -37,13 +37,17 @@ STATUS_DIR = BASE_DIR / "dados" / "status"
 
 STATUS_FILE = STATUS_DIR / "fila.json"
 
-W = 1920
-H = 1080
+# Vertical (Shorts) — mesmo formato do pipeline de shorts de
+# resultado, que performa muito melhor que o horizontal antigo
+# (vídeo horizontal curto não é nem Short nem vídeo longo de
+# verdade, e ficava sem distribuição).
+W = 1080
+H = 1920
 FPS = 30
 
 # Margem de segurança pra nenhum texto/selo ficar cortado
 # pelo zoom lento (Ken Burns) aplicado no vídeo final.
-MARGEM_SEGURA_X = 100
+MARGEM_SEGURA_X = 60
 MARGEM_SEGURA_Y = 55
 
 VOICE_PREFERRED = "pt-BR-AntonioNeural"
@@ -341,6 +345,26 @@ def carregar_noticia(path):
         or roteiro.get("titulo")
         or "Notícia do futebol"
     )
+
+    titulo = str(titulo).strip()
+
+    # O título bruto da notícia ainda pode ter o sufixo
+    # " - Veículo" que o Google Notícias acrescenta (o título
+    # do YouTube já remove isso em gerar_titulo_youtube, mas o
+    # título exibido NA TELA do vídeo vinha direto daqui, sem
+    # passar por essa limpeza).
+    publicador = str(
+        noticia.get("publicador", "")
+    ).strip()
+
+    sufixo_veiculo = f" - {publicador}"
+
+    if (
+        publicador
+        and titulo.lower().endswith(sufixo_veiculo.lower())
+    ):
+
+        titulo = titulo[: -len(sufixo_veiculo)].strip()
 
     fonte = (
         noticia.get("fonte")
@@ -972,6 +996,12 @@ def criar_fallback_noticia(
         "📰 Criando arte gráfica específica da notícia..."
     )
 
+    # Fundo com um leve gradiente vertical (em vez de cor lisa)
+    # — dá uma profundidade mínima ao card. A manchete NÃO é
+    # desenhada aqui: preparar_frame_video já desenha o
+    # cabeçalho/selo/painel/rodapé por cima de qualquer imagem
+    # (foto real ou este fallback), então repetir o título aqui
+    # só duplicava o texto na tela.
     imagem = Image.new(
         "RGB",
         (W, H),
@@ -982,97 +1012,33 @@ def criar_fallback_noticia(
         imagem
     )
 
-    # Fundo.
-    draw.rectangle(
-        [0, 0, W, H],
-        fill=(7, 19, 29),
-    )
+    topo = (10, 26, 40)
+    base = (5, 10, 16)
 
-    # Faixa superior.
-    draw.rectangle(
-        [0, 0, W, 150],
-        fill=(5, 11, 18),
-    )
+    for y in range(H):
 
-    # Barra vermelha.
+        t = y / (H - 1)
+
+        cor = tuple(
+            int(topo[c] + (base[c] - topo[c]) * t)
+            for c in range(3)
+        )
+
+        draw.line(
+            [(0, y), (W, y)],
+            fill=cor,
+        )
+
+    # Barra vermelha lateral — identidade visual do canal.
     draw.rectangle(
         [0, 0, 18, H],
         fill=(233, 39, 39),
     )
 
-    draw.rectangle(
-        [0, 1010, W, H],
-        fill=(3, 7, 11),
-    )
-
-    draw.rectangle(
-        [0, 1010, W, 1015],
-        fill=(233, 39, 39),
-    )
-
-    fonte_logo = ImageFont.truetype(
-        str(FONT_BOLD),
-        48,
-    )
-
-    fonte_categoria = ImageFont.truetype(
-        str(FONT_BOLD),
-        30,
-    )
-
-    fonte_titulo = ImageFont.truetype(
-        str(FONT_BOLD),
-        50,
-    )
-
-    fonte_rodape = ImageFont.truetype(
-        str(FONT_NORMAL),
-        24,
-    )
-
-    draw.text(
-        (60, 35),
-        "NOTÍCIA SHOW DE BOLA",
-        font=fonte_logo,
-        fill="white",
-    )
-
-    draw.text(
-        (60, 100),
-        "NOTÍCIA DO FUTEBOL",
-        font=fonte_categoria,
-        fill=(233, 39, 39),
-    )
-
-    linhas = textwrap.wrap(
-        str(titulo),
-        width=42,
-    )
-
-    y = 300
-
-    for linha in linhas[:6]:
-
-        draw.text(
-            (80, y),
-            linha,
-            font=fonte_titulo,
-            fill="white",
-        )
-
-        y += 75
-
-    draw.text(
-        (60, 1030),
-        "NOTÍCIAS •  FUTEBOL  •  NOTÍCIAS  •  ANÁLISES",
-        font=fonte_rodape,
-        fill="white",
-    )
-
     imagem.save(
         destino,
         "JPEG",
-        quality=95,
+        quality=92,
     )
 
     if not imagem_valida(
@@ -1371,7 +1337,7 @@ def preparar_frame_video(
         )
 
     # ------------------------------------------------------------
-    # Crop para 16:9
+    # Crop para 9:16
     # ------------------------------------------------------------
 
     proporcao_desejada = W / H
@@ -1430,24 +1396,19 @@ def preparar_frame_video(
     )
 
     # ------------------------------------------------------------
-    # Escurecimento
+    # Escurecimento — o quadro todo fica um pouco mais escuro,
+    # pra qualquer texto ficar legível em cima de qualquer foto
+    # (mesmo padrão usado no pipeline de shorts de resultado).
     # ------------------------------------------------------------
-
-    escurecida = Image.new(
-        "RGB",
-        (W, H),
-        (0, 0, 0),
-    )
-
-    escurecida.paste(
-        imagem
-    )
-
-    imagem = escurecida
 
     draw = ImageDraw.Draw(
         imagem,
         "RGBA",
+    )
+
+    draw.rectangle(
+        [0, 0, W, H],
+        fill=(0, 0, 0, 110),
     )
 
     # ------------------------------------------------------------
@@ -1455,27 +1416,12 @@ def preparar_frame_video(
     # ------------------------------------------------------------
 
     draw.rectangle(
-        [0, 0, W, 155],
-        fill=(3, 8, 14, 225),
+        [0, 0, W, 190],
+        fill=(3, 8, 14, 235),
     )
 
     draw.rectangle(
-        [0, 150, W, 155],
-        fill=(233, 39, 39, 255),
-    )
-
-    # ------------------------------------------------------------
-    # Painel da notícia
-    # ------------------------------------------------------------
-
-    draw.rounded_rectangle(
-        [55, 690, 1865, 965],
-        radius=20,
-        fill=(0, 0, 0, 205),
-    )
-
-    draw.rectangle(
-        [55, 690, 73, 965],
+        [0, 185, W, 190],
         fill=(233, 39, 39, 255),
     )
 
@@ -1484,12 +1430,12 @@ def preparar_frame_video(
     # ------------------------------------------------------------
 
     draw.rectangle(
-        [0, 1010, W, H],
+        [0, H - 110, W, H],
         fill=(3, 7, 11, 245),
     )
 
     draw.rectangle(
-        [0, 1010, W, 1015],
+        [0, H - 110, W, H - 105],
         fill=(233, 39, 39, 255),
     )
 
@@ -1499,27 +1445,22 @@ def preparar_frame_video(
 
     fonte_logo = ImageFont.truetype(
         str(FONT_BOLD),
-        42,
-    )
-
-    fonte_subtitulo = ImageFont.truetype(
-        str(FONT_NORMAL),
-        24,
+        40,
     )
 
     fonte_titulo = ImageFont.truetype(
         str(FONT_BOLD),
-        42,
+        46,
     )
 
     fonte_fonte = ImageFont.truetype(
         str(FONT_NORMAL),
-        23,
+        28,
     )
 
     fonte_rodape = ImageFont.truetype(
         str(FONT_NORMAL),
-        22,
+        24,
     )
 
     # ------------------------------------------------------------
@@ -1531,13 +1472,6 @@ def preparar_frame_video(
         "NOTICIAS SHOW DE BOLA",
         font=fonte_logo,
         fill=(255, 255, 255, 255),
-    )
-
-    draw.text(
-        (MARGEM_SEGURA_X, MARGEM_SEGURA_Y + 58),
-        "FUTEBOL  •  NOTÍCIAS  •  ANÁLISES",
-        font=fonte_subtitulo,
-        fill=(233, 39, 39, 255),
     )
 
     # ------------------------------------------------------------
@@ -1561,10 +1495,10 @@ def preparar_frame_video(
         caixa_selo[2] - caixa_selo[0] + 56
     )
 
-    selo_x2 = W - MARGEM_SEGURA_X
-    selo_x1 = selo_x2 - largura_selo
-    selo_y1 = MARGEM_SEGURA_Y
-    selo_y2 = selo_y1 + 60
+    selo_x1 = MARGEM_SEGURA_X
+    selo_x2 = selo_x1 + largura_selo
+    selo_y1 = MARGEM_SEGURA_Y + 62
+    selo_y2 = selo_y1 + 58
 
     draw.rounded_rectangle(
         [selo_x1, selo_y1, selo_x2, selo_y2],
@@ -1580,8 +1514,30 @@ def preparar_frame_video(
     )
 
     # ------------------------------------------------------------
-    # Título
+    # Painel central da notícia (manchete)
     # ------------------------------------------------------------
+
+    def texto_centralizado(texto, fonte, y, fill=(255, 255, 255, 255)):
+
+        caixa = draw.textbbox((0, 0), texto, font=fonte)
+        largura_texto = caixa[2] - caixa[0]
+        x = (W - largura_texto) // 2
+
+        draw.text((x, y), texto, font=fonte, fill=fill)
+
+    card_y1 = 700
+    card_y2 = 1260
+
+    draw.rounded_rectangle(
+        [MARGEM_SEGURA_X, card_y1, W - MARGEM_SEGURA_X, card_y2],
+        radius=24,
+        fill=(0, 0, 0, 210),
+    )
+
+    draw.rectangle(
+        [MARGEM_SEGURA_X, card_y1, W - MARGEM_SEGURA_X, card_y1 + 6],
+        fill=(233, 39, 39, 255),
+    )
 
     titulo = str(
         noticia.get(
@@ -1590,34 +1546,29 @@ def preparar_frame_video(
         )
     )
 
-    titulo_x = MARGEM_SEGURA_X + 40
-
-    largura_titulo_maxima = (
-        W - titulo_x - MARGEM_SEGURA_X
-    )
+    largura_titulo_maxima = W - 2 * (MARGEM_SEGURA_X + 50)
 
     linhas = quebrar_por_largura(
         draw,
         titulo,
         fonte_titulo,
         largura_titulo_maxima,
-    )
+    )[:6]
 
-    y = 720
+    altura_linha = 60
+    altura_bloco = altura_linha * len(linhas)
+    y_inicial = card_y1 + ((card_y2 - card_y1) - altura_bloco) // 2
 
-    for linha in linhas[:4]:
+    for indice, linha in enumerate(linhas):
 
-        draw.text(
-            (titulo_x, y),
+        texto_centralizado(
             linha,
-            font=fonte_titulo,
-            fill=(255, 255, 255, 255),
+            fonte_titulo,
+            y_inicial + indice * altura_linha,
         )
 
-        y += 52
-
     # ------------------------------------------------------------
-    # Fonte
+    # Fonte — logo abaixo do painel, como legenda pequena.
     # ------------------------------------------------------------
 
     fonte = str(
@@ -1627,10 +1578,10 @@ def preparar_frame_video(
         )
     )
 
-    draw.text(
-        (titulo_x, 900),
+    texto_centralizado(
         f"Fonte: {fonte}",
-        font=fonte_fonte,
+        fonte_fonte,
+        card_y2 + 30,
         fill=(210, 220, 230, 255),
     )
 
@@ -1638,12 +1589,8 @@ def preparar_frame_video(
     # Rodapé
     # ------------------------------------------------------------
 
-    # O rodapé (faixa 1010-1080) fica perto da borda inferior,
-    # que é justamente onde o zoom recorta — usa um respiro
-    # pequeno a partir do topo da faixa, em vez da borda de
-    # baixo, pra não ser cortado.
     draw.text(
-        (MARGEM_SEGURA_X, 1018),
+        (MARGEM_SEGURA_X, H - 80),
         "NEWS YOUTUBE  •  FUTEBOL  •  NOTÍCIAS  •  ANÁLISES",
         font=fonte_rodape,
         fill=(255, 255, 255, 255),
@@ -1803,7 +1750,7 @@ def gerar_video(
     # ancorar no canto superior esquerdo, o que cortava o
     # rodapé e o selo em vez de manter tudo centralizado).
     filtro_zoom = (
-        "scale=2880:1620,"
+        "scale=1620:2880,"
         "zoompan="
         f"z='min(zoom+0.0003,1.05)':"
         "x='iw/2-(iw/zoom/2)':"
