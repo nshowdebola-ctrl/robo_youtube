@@ -625,9 +625,13 @@ def fallback_roteiro(
         contextos["futebol"]
     )
 
+    # O fato vem PRIMEIRO (gancho dos 2 primeiros segundos, o
+    # trecho que mais pesa na retenção do Short) — a frase de
+    # aquecimento genérica ("Mercado da bola agitado.") passou pra
+    # depois, como reação/comentário, em vez de atrasar o fato.
     texto = (
-        f"{abertura} "
         f"{titulo}. "
+        f"{abertura} "
         f"{desenvolvimento} "
         f"{contexto} "
         f"Fique ligado no canal pra acompanhar as "
@@ -693,9 +697,14 @@ REGRAS OBRIGATÓRIAS:
 - Linguagem natural para narração.
 - Frases curtas e claras.
 - O texto deve ter ritmo.
-- Comece com um gancho interessante.
-- Apresente o fato principal.
-- Explique os detalhes disponíveis.
+- A PRIMEIRA FRASE tem que entregar o fato principal direto
+  (o que aconteceu) — é o trecho que decide se a pessoa
+  continua assistindo ou pula o vídeo.
+- NÃO comece com frase de aquecimento genérica tipo "Grande
+  novidade no mundo do futebol", "Mercado da bola em
+  movimento" ou parecidas — isso atrasa o fato e faz a
+  pessoa perder o interesse nos primeiros segundos.
+- Depois do fato principal, explique os detalhes disponíveis.
 - Apresente o contexto que estiver no material.
 - Termine de forma natural.
 - NÃO use a frase "agora fica a expectativa

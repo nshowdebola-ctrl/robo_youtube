@@ -295,9 +295,12 @@ def montar_roteiro_short(resultado, indice):
     produto = produto_afiliado(indice)
     mencao_afiliado = frase_narracao_afiliado(produto)
 
+    # O placar (corpo) vem PRIMEIRO — gancho dos 2 primeiros
+    # segundos, o trecho que mais pesa na retenção do Short. A
+    # frase de aquecimento genérica passou pra depois.
     texto = " ".join(
         parte for parte in (
-            abertura, corpo, desenvolvimento, contexto,
+            corpo, abertura, desenvolvimento, contexto,
             fechamento, mencao_afiliado,
         ) if parte
     )
@@ -1098,9 +1101,12 @@ def _texto_narracao_fallback(titulo, produto):
     da narração completa dele.
     """
 
+    # Título (o fato) vem PRIMEIRO — mesmo ajuste de gancho do
+    # fallback_roteiro() no vídeo longo, a frase de aquecimento
+    # genérica passou pra depois.
     texto = (
-        f"Mais uma notícia do futebol brasileiro. "
         f"{titulo}. "
+        f"Mais uma notícia do futebol brasileiro. "
         f"Esse assunto tem repercutido bastante entre "
         f"torcedores e deve continuar rendendo comentário "
         f"nas próximas horas. "
