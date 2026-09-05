@@ -162,6 +162,12 @@ def main():
 
     salvar_json(STATUS_YOUTUBE_FILE, status_youtube)
 
+    # Já publicado — não precisa mais do arquivo local. O áudio e
+    # a imagem em dados/audios/ e dados/imagens/ ficam guardados de
+    # propósito (o pipeline de resumo do dia ainda pode reaproveitar
+    # essa notícia depois).
+    arquivo_video.unlink(missing_ok=True)
+
     return 0
 
 

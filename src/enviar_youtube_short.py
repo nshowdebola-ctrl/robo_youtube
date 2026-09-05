@@ -216,6 +216,9 @@ def main():
 
     salvar_json(STATUS_YOUTUBE_FILE, status_youtube)
 
+    # Já publicado — não precisa mais do arquivo local.
+    arquivo_video.unlink(missing_ok=True)
+
     return 0
 
 

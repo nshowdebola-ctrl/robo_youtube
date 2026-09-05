@@ -23,7 +23,7 @@ em dois vídeos de resumo.
 import json
 import subprocess
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
@@ -83,6 +83,13 @@ FONT_NORMAL = Path(
 
 MINIMO_NOTICIAS = 2
 MAXIMO_NOTICIAS = 8
+
+# "Resumo do dia" não pode incluir notícia de dias atrás — sem
+# isso, o backlog antigo (notícias concluídas há muito tempo, mas
+# nunca usadas em nenhum resumo) entrava disfarçado de notícia de
+# hoje. 30h em vez de 24h só pra dar folga pra edição das 12h
+# cobrir a virada da madrugada.
+JANELA_MAXIMA_HORAS = 30
 
 TEXTO_INTRO = (
     "Você está no resumo do dia do Show de Bola. "
@@ -167,15 +174,45 @@ def proximo_indice_resumo():
     return maior + 1
 
 
+def _data_publicacao_noticia(roteiro_path):
+    """
+    Devolve a data (UTC, timezone-aware) em que a notícia foi
+    coletada, ou None se não der pra ler. Usado só pra excluir
+    backlog antigo do resumo — não é a data do roteiro/vídeo.
+    """
+
+    dados = carregar_json(roteiro_path, {})
+    bruta = dados.get("noticia", {}).get("data")
+
+    if not bruta:
+        return None
+
+    try:
+        data = datetime.fromisoformat(str(bruta))
+
+    except ValueError:
+        return None
+
+    if data.tzinfo is None:
+        data = data.replace(tzinfo=timezone.utc)
+
+    return data
+
+
 def selecionar_noticias():
     """
     Devolve, em ordem cronológica (mais antiga primeiro), até
-    MAXIMO_NOTICIAS notícias concluídas no pipeline principal que
-    ainda não apareceram em nenhum resumo anterior.
+    MAXIMO_NOTICIAS notícias concluídas no pipeline principal,
+    publicadas nas últimas JANELA_MAXIMA_HORAS, que ainda não
+    apareceram em nenhum resumo anterior.
     """
 
     status_principal = carregar_json(STATUS_PRINCIPAL_FILE, {})
     usados = set(carregar_json(RESUMO_USADOS_FILE, []))
+
+    limite_idade = datetime.now(timezone.utc) - timedelta(
+        hours=JANELA_MAXIMA_HORAS
+    )
 
     candidatas = []
 
@@ -208,6 +245,11 @@ def selecionar_noticias():
             and audio_path.exists()
             and imagem_path.exists()
         ):
+            continue
+
+        data_publicacao = _data_publicacao_noticia(roteiro_path)
+
+        if data_publicacao is None or data_publicacao < limite_idade:
             continue
 
         candidatas.append(numero)
@@ -595,7 +637,10 @@ def renderizar_clipe(frame, audio, destino):
 
 def concatenar_clipes(clipes, destino):
 
-    lista_path = destino.with_suffix(".txt")
+    # A lista fica em partes/ (scratch), não junto do vídeo final
+    # em videos/ — limpar_intermediarios() apaga tudo que está em
+    # partes/ depois que a concatenação terminar.
+    lista_path = RESUMO_PARTES_DIR / f"{destino.stem}_lista.txt"
 
     with lista_path.open("w", encoding="utf-8") as arquivo:
 
@@ -626,6 +671,39 @@ def concatenar_clipes(clipes, destino):
         print(resultado.stderr[-4000:])
 
         raise RuntimeError("FFmpeg falhou concatenando os clipes.")
+
+
+def limpar_intermediarios(chave):
+    """
+    Apaga os clipes/frames/áudios de abertura e encerramento
+    usados só pra montar {chave}.mp4 — depois que a concatenação
+    terminou, ninguém mais precisa deles.
+    """
+
+    for diretorio in (RESUMO_PARTES_DIR, RESUMO_AUDIOS_DIR):
+
+        for arquivo in diretorio.glob(f"{chave}_*"):
+
+            arquivo.unlink(missing_ok=True)
+
+
+def limpar_lixo_de_execucao_anterior():
+    """
+    dados/resumo/partes/ e dados/resumo/audios/ são só rascunho —
+    entre uma execução e outra devem estar sempre vazias
+    (limpar_intermediarios já limpa no final de toda execução bem
+    sucedida). Se a execução anterior travou/foi interrompida antes
+    de chegar lá (ex.: processo morto no meio do ffmpeg), sobra
+    lixo — varre e apaga tudo aqui, no começo de toda execução,
+    pra nunca acumular.
+    """
+
+    for diretorio in (RESUMO_PARTES_DIR, RESUMO_AUDIOS_DIR):
+
+        for arquivo in diretorio.glob("*"):
+
+            if arquivo.is_file():
+                arquivo.unlink(missing_ok=True)
 
 
 # ============================================================================
@@ -689,6 +767,7 @@ def gerar_tags(titulos):
 def processar():
 
     preparar_diretorios()
+    limpar_lixo_de_execucao_anterior()
 
     numeros = selecionar_noticias()
 
@@ -828,6 +907,8 @@ def processar():
         print(f"✅ Vídeo final: {destino_final}")
         print(f"⏱️ Duração total: {formatar_tempo(tempo_acumulado)}")
 
+        limpar_intermediarios(chave)
+
         # ------------------------------------------------------------
         # METADADOS
         # ------------------------------------------------------------
@@ -878,6 +959,11 @@ def processar():
         fila = carregar_json(RESUMO_FILA_FILE, {})
         fila[chave] = {"status": "erro", "erro": str(erro)}
         salvar_json(RESUMO_FILA_FILE, fila)
+
+        # Não deixa sobrar clipe/frame/áudio de uma tentativa que
+        # falhou — não faz sentido retomar de onde parou (a próxima
+        # execução escolhe notícias do zero de qualquer forma).
+        limpar_intermediarios(chave)
 
         print()
         print("=" * 75)
