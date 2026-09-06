@@ -21,13 +21,17 @@ execuções não pedem autorização de novo (a menos que o
 token seja revogado).
 """
 
+import time
 from pathlib import Path
 
+from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
+
+from whatsapp_notify import send_whatsapp
 
 
 # ============================================================
@@ -48,6 +52,41 @@ SCOPES = ["https://www.googleapis.com/auth/youtube.force-ssl"]
 
 # 17 = Sports, categoria padrão do YouTube.
 CATEGORIA_ESPORTES = "17"
+
+# Marca quando o último alerta de token expirado foi mandado, pra
+# não spammar WhatsApp a cada execução do cron (roda várias vezes
+# por dia) enquanto o usuário não reautentica.
+MARCADOR_ALERTA_TOKEN = CREDENCIAIS_DIR / ".alerta_token_expirado"
+INTERVALO_MINIMO_ALERTA_SEGUNDOS = 6 * 60 * 60
+
+
+def _avisar_token_expirado(erro):
+
+    try:
+        if MARCADOR_ALERTA_TOKEN.exists():
+            ultimo = float(MARCADOR_ALERTA_TOKEN.read_text().strip() or 0)
+            if time.time() - ultimo < INTERVALO_MINIMO_ALERTA_SEGUNDOS:
+                return
+    except (OSError, ValueError):
+        pass
+
+    send_whatsapp(
+        "⚠️ news-youtube: o token do YouTube expirou/foi revogado "
+        "e parou de publicar vídeo. Rode "
+        "'python3 src/reautenticar_youtube.py' pra renovar."
+    )
+
+    try:
+        MARCADOR_ALERTA_TOKEN.write_text(str(time.time()))
+    except OSError:
+        pass
+
+
+def _limpar_alerta_token():
+    try:
+        MARCADOR_ALERTA_TOKEN.unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 # ============================================================
@@ -88,7 +127,11 @@ def autenticar():
             and credenciais.refresh_token
         ):
 
-            credenciais.refresh(Request())
+            try:
+                credenciais.refresh(Request())
+            except RefreshError as erro:
+                _avisar_token_expirado(erro)
+                raise
 
         else:
 
@@ -101,6 +144,8 @@ def autenticar():
                 port=0,
                 open_browser=False,
             )
+
+        _limpar_alerta_token()
 
         CREDENCIAIS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -122,8 +167,11 @@ def autenticar():
 
 # O YouTube limita as tags pela soma dos caracteres de todas
 # juntas (separadas por vírgula), não pela quantidade de tags.
-# Usamos 495 em vez de 500 pra sobrar uma margem de segurança.
-LIMITE_CARACTERES_TAGS = 495
+# 495 (quase no limite oficial de 500) já deu "invalid video
+# keywords" na prática (resumo_1, 2026-09-05/06) mesmo contando
+# em bytes UTF-8 — o limite real parece mais apertado do que o
+# documentado. Usando 350 com boa margem de segurança.
+LIMITE_CARACTERES_TAGS = 350
 
 # Limite real de título do YouTube.
 LIMITE_CARACTERES_TITULO = 100
@@ -149,13 +197,19 @@ def _truncar_titulo(titulo, limite=LIMITE_CARACTERES_TITULO):
 
 
 def _limitar_tags_por_caracteres(tags, limite=LIMITE_CARACTERES_TAGS):
+    """
+    O limite do YouTube é em bytes UTF-8 da string final (separada
+    por vírgulas), não em caracteres — acentos/cedilha ocupam 2
+    bytes cada, então contar por len() subestima o tamanho real e
+    deixa passar listas que o YouTube rejeita (invalidTags).
+    """
 
     selecionadas = []
     total = 0
 
     for tag in tags:
 
-        acrescimo = len(tag) + (1 if selecionadas else 0)
+        acrescimo = len(tag.encode("utf-8")) + (1 if selecionadas else 0)
 
         if total + acrescimo > limite:
             break
