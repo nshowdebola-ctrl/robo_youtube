@@ -14,7 +14,7 @@ import json
 import sys
 from pathlib import Path
 
-from youtube_upload import autenticar, enviar_video
+from youtube_upload import autenticar, enviar_video, gerado_hoje
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -99,6 +99,20 @@ def encontrar_proximo():
         video = VIDEOS_DIR / f"{chave}.mp4"
 
         if not video.exists():
+            continue
+
+        if not gerado_hoje(video):
+
+            status_youtube[chave] = {
+                "status": "pulado_desatualizado",
+                "motivo": (
+                    "resumo gerado em dia anterior — o título/"
+                    "descrição têm a data de ontem, não publica "
+                    "com um dia de atraso"
+                ),
+            }
+            salvar_json(STATUS_YOUTUBE_FILE, status_youtube)
+            video.unlink(missing_ok=True)
             continue
 
         return chave, arquivo, video

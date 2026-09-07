@@ -22,6 +22,7 @@ token seja revogado).
 """
 
 import time
+from datetime import datetime
 from pathlib import Path
 
 from google.auth.exceptions import RefreshError
@@ -87,6 +88,23 @@ def _limpar_alerta_token():
         MARCADOR_ALERTA_TOKEN.unlink(missing_ok=True)
     except OSError:
         pass
+
+
+def gerado_hoje(caminho_video):
+    """
+    True se o arquivo de vídeo foi gerado (mtime) na mesma data
+    local de hoje.
+
+    Usado pelos 3 scripts de publicação pra não sair, com atraso
+    de um dia (ex.: quando esbarra na cota diária de upload do
+    YouTube), vídeo/Short/resumo com conteúdo datado ("notícia de
+    hoje", "Resumo do dia — 06/09") que já ficou velho.
+    """
+    try:
+        mtime = datetime.fromtimestamp(Path(caminho_video).stat().st_mtime)
+    except OSError:
+        return False
+    return mtime.date() == datetime.now().date()
 
 
 # ============================================================
