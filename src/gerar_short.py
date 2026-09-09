@@ -20,7 +20,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageEnhance
 
 from gerar_video import (
     FONT_BOLD,
@@ -63,6 +63,23 @@ AFILIADOS_FILE = BASE_DIR / "afiliados.json"
 
 DIVULGACAO_AFILIADO = (
     "Como Associado Amazon, ganho com compras qualificadas."
+)
+
+# ============================================================================
+# TRILHA DE FUNDO (teste 2026-09-09, só no Short de placar por enquanto)
+# ============================================================================
+
+MUSICA_FUNDO = (
+    BASE_DIR / "assets" / "musica" / "news_room_news_spence.mp3"
+)
+
+# Bem baixa de propósito — é "cama" atrás da narração, não pode
+# competir com a voz.
+VOLUME_MUSICA = 0.12
+
+CREDITO_MUSICA = (
+    "Música: \"News Room News\" por Spence "
+    "(YouTube Audio Library)"
 )
 
 
@@ -326,7 +343,8 @@ def montar_roteiro_short(resultado, indice):
         + f"{corpo} "
         f"Confira o resultado no Noticias Show de Bola. "
         f"Inscreva-se para acompanhar todos os resultados do dia.\n\n"
-        + f"#Shorts #futebol #resultados"
+        + f"#Shorts #futebol #resultados\n\n"
+        + f"🎵 {CREDITO_MUSICA}"
     )
 
     # Base fixa com ~290 caracteres (mesmo orçamento do
@@ -640,15 +658,20 @@ def preparar_frame_short(arquivo_imagem, resultado, indice):
 
         imagem = Image.new("RGB", (W, H), (10, 12, 18))
 
+    imagem = ImageEnhance.Color(imagem).enhance(1.35)
+    imagem = ImageEnhance.Contrast(imagem).enhance(1.1)
+
     fundo = Image.new("RGB", (W, H), (0, 0, 0))
     fundo.paste(imagem)
     imagem = fundo
 
     draw = ImageDraw.Draw(imagem, "RGBA")
 
-    # Escurece o quadro todo, pra qualquer texto ficar legível
-    # em cima de qualquer foto.
-    draw.rectangle([0, 0, W, H], fill=(0, 0, 0, 110))
+    # Escurece só um pouco o quadro todo, pra qualquer texto ficar
+    # legível em cima de qualquer foto sem apagar a imagem — o
+    # YouTube usa um frame do próprio vídeo como thumbnail do Short,
+    # então a foto precisa continuar viva/chamativa.
+    draw.rectangle([0, 0, W, H], fill=(0, 0, 0, 55))
 
     # Cabeçalho.
     draw.rectangle([0, 0, W, 190], fill=(3, 8, 14, 235))
@@ -695,7 +718,7 @@ def preparar_frame_short(arquivo_imagem, resultado, indice):
     draw.rounded_rectangle(
         [MARGEM_SEGURA_X, card_y1, W - MARGEM_SEGURA_X, card_y2],
         radius=24,
-        fill=(0, 0, 0, 210),
+        fill=(0, 0, 0, 115),
     )
 
     draw.rectangle(
@@ -720,7 +743,14 @@ def preparar_frame_short(arquivo_imagem, resultado, indice):
         largura_texto = caixa[2] - caixa[0]
         x = (W - largura_texto) // 2
 
-        draw.text((x, y), texto, font=fonte, fill=(255, 255, 255, 255))
+        draw.text(
+            (x, y),
+            texto,
+            font=fonte,
+            fill=(255, 255, 255, 255),
+            stroke_width=3,
+            stroke_fill=(0, 0, 0, 255),
+        )
 
     linhas_a = quebrar_por_largura(
         draw, time_a, fonte_time, largura_max_time
@@ -804,25 +834,61 @@ def gerar_video_short(resultado, indice, arquivo_audio, arquivo_imagem):
         f"fps={FPS}"
     )
 
-    comando = [
-        "ffmpeg", "-y",
-        "-loop", "1",
-        "-framerate", str(FPS),
-        "-i", str(frame),
-        "-i", str(arquivo_audio),
-        "-vf", filtro_zoom,
-        "-c:v", "libx264",
-        "-preset", "veryfast",
-        "-crf", "21",
-        "-pix_fmt", "yuv420p",
-        "-c:a", "aac",
-        "-b:a", "192k",
-        "-ar", "44100",
-        "-t", f"{duracao:.3f}",
-        "-shortest",
-        "-movflags", "+faststart",
-        str(destino),
-    ]
+    # Trilha de fundo (teste 2026-09-09) — só nesse pipeline por
+    # enquanto. Se o arquivo não existir, cai no comando antigo
+    # sem música (não quebra o pipeline).
+    usar_musica = MUSICA_FUNDO.exists()
+
+    if usar_musica:
+
+        comando = [
+            "ffmpeg", "-y",
+            "-loop", "1",
+            "-framerate", str(FPS),
+            "-i", str(frame),
+            "-i", str(arquivo_audio),
+            "-stream_loop", "-1",
+            "-i", str(MUSICA_FUNDO),
+            "-filter_complex",
+            f"[0:v]{filtro_zoom}[vout];"
+            f"[2:a]volume={VOLUME_MUSICA}[musica];"
+            f"[1:a][musica]amix=inputs=2:duration=first:"
+            f"dropout_transition=0[aout]",
+            "-map", "[vout]",
+            "-map", "[aout]",
+            "-c:v", "libx264",
+            "-preset", "veryfast",
+            "-crf", "21",
+            "-pix_fmt", "yuv420p",
+            "-c:a", "aac",
+            "-b:a", "192k",
+            "-ar", "44100",
+            "-t", f"{duracao:.3f}",
+            "-movflags", "+faststart",
+            str(destino),
+        ]
+
+    else:
+
+        comando = [
+            "ffmpeg", "-y",
+            "-loop", "1",
+            "-framerate", str(FPS),
+            "-i", str(frame),
+            "-i", str(arquivo_audio),
+            "-vf", filtro_zoom,
+            "-c:v", "libx264",
+            "-preset", "veryfast",
+            "-crf", "21",
+            "-pix_fmt", "yuv420p",
+            "-c:a", "aac",
+            "-b:a", "192k",
+            "-ar", "44100",
+            "-t", f"{duracao:.3f}",
+            "-shortest",
+            "-movflags", "+faststart",
+            str(destino),
+        ]
 
     print()
     print("🎞️ Executando FFmpeg...")
@@ -951,13 +1017,16 @@ def preparar_frame_noticia(arquivo_imagem, titulo, indice):
 
         imagem = Image.new("RGB", (W, H), (10, 12, 18))
 
+    imagem = ImageEnhance.Color(imagem).enhance(1.35)
+    imagem = ImageEnhance.Contrast(imagem).enhance(1.1)
+
     fundo = Image.new("RGB", (W, H), (0, 0, 0))
     fundo.paste(imagem)
     imagem = fundo
 
     draw = ImageDraw.Draw(imagem, "RGBA")
 
-    draw.rectangle([0, 0, W, H], fill=(0, 0, 0, 110))
+    draw.rectangle([0, 0, W, H], fill=(0, 0, 0, 55))
 
     # Cabeçalho (igual ao card de placar).
     draw.rectangle([0, 0, W, 190], fill=(3, 8, 14, 235))
@@ -1003,7 +1072,7 @@ def preparar_frame_noticia(arquivo_imagem, titulo, indice):
     draw.rounded_rectangle(
         [MARGEM_SEGURA_X, card_y1, W - MARGEM_SEGURA_X, card_y2],
         radius=24,
-        fill=(0, 0, 0, 210),
+        fill=(0, 0, 0, 115),
     )
 
     draw.rectangle(
@@ -1034,6 +1103,8 @@ def preparar_frame_noticia(arquivo_imagem, titulo, indice):
             linha,
             font=fonte_manchete,
             fill=(255, 255, 255, 255),
+            stroke_width=3,
+            stroke_fill=(0, 0, 0, 255),
         )
 
     fonte_rotulo = ImageFont.truetype(str(FONT_NORMAL), 30)

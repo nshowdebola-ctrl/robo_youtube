@@ -15,7 +15,7 @@ import requests
 from bs4 import BeautifulSoup
 
 try:
-    from PIL import Image, ImageDraw, ImageFont, ImageFilter
+    from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
 except ImportError:
     print("❌ Pillow não está instalado.")
     print("Execute:")
@@ -1396,8 +1396,17 @@ def preparar_frame_video(
     )
 
     # ------------------------------------------------------------
-    # Escurecimento — o quadro todo fica um pouco mais escuro,
-    # pra qualquer texto ficar legível em cima de qualquer foto
+    # Cores mais vivas — o YouTube usa um frame do próprio vídeo
+    # como thumbnail (Short não tem capa customizada), então a
+    # foto precisa ficar chamativa mesmo em miniatura pequena.
+    # ------------------------------------------------------------
+
+    imagem = ImageEnhance.Color(imagem).enhance(1.35)
+    imagem = ImageEnhance.Contrast(imagem).enhance(1.1)
+
+    # ------------------------------------------------------------
+    # Escurecimento leve — só o suficiente pra qualquer texto
+    # ficar legível em cima de qualquer foto, sem apagar a imagem
     # (mesmo padrão usado no pipeline de shorts de resultado).
     # ------------------------------------------------------------
 
@@ -1408,7 +1417,7 @@ def preparar_frame_video(
 
     draw.rectangle(
         [0, 0, W, H],
-        fill=(0, 0, 0, 110),
+        fill=(0, 0, 0, 55),
     )
 
     # ------------------------------------------------------------
@@ -1523,7 +1532,14 @@ def preparar_frame_video(
         largura_texto = caixa[2] - caixa[0]
         x = (W - largura_texto) // 2
 
-        draw.text((x, y), texto, font=fonte, fill=fill)
+        draw.text(
+            (x, y),
+            texto,
+            font=fonte,
+            fill=fill,
+            stroke_width=3,
+            stroke_fill=(0, 0, 0, 255),
+        )
 
     card_y1 = 700
     card_y2 = 1260
@@ -1531,7 +1547,7 @@ def preparar_frame_video(
     draw.rounded_rectangle(
         [MARGEM_SEGURA_X, card_y1, W - MARGEM_SEGURA_X, card_y2],
         radius=24,
-        fill=(0, 0, 0, 210),
+        fill=(0, 0, 0, 115),
     )
 
     draw.rectangle(

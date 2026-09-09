@@ -26,7 +26,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageEnhance
 
 from gerar_video import (
     gerar_audio,
@@ -325,7 +325,12 @@ def _abrir_imagem_cortada_16_9(caminho_imagem):
             (0, topo, largura, topo + nova_altura)
         )
 
-    return imagem.resize((W, H), Image.Resampling.LANCZOS)
+    imagem = imagem.resize((W, H), Image.Resampling.LANCZOS)
+
+    imagem = ImageEnhance.Color(imagem).enhance(1.35)
+    imagem = ImageEnhance.Contrast(imagem).enhance(1.1)
+
+    return imagem
 
 
 def _fundo_gradiente():
@@ -410,7 +415,14 @@ def _texto_centralizado(draw, texto, fonte, y, fill=(255, 255, 255, 255)):
     largura_texto = caixa[2] - caixa[0]
     x = (W - largura_texto) // 2
 
-    draw.text((x, y), texto, font=fonte, fill=fill)
+    draw.text(
+        (x, y),
+        texto,
+        font=fonte,
+        fill=fill,
+        stroke_width=3,
+        stroke_fill=(0, 0, 0, 255),
+    )
 
 
 # ============================================================================
@@ -423,7 +435,7 @@ def preparar_frame_noticia(dados_noticia, indice, total, destino):
 
     draw = ImageDraw.Draw(imagem, "RGBA")
 
-    draw.rectangle([0, 0, W, H], fill=(0, 0, 0, 120))
+    draw.rectangle([0, 0, W, H], fill=(0, 0, 0, 55))
 
     _desenhar_cabecalho_rodape(
         draw,
@@ -437,7 +449,7 @@ def preparar_frame_noticia(dados_noticia, indice, total, destino):
     draw.rounded_rectangle(
         [MARGEM_SEGURA_X, card_y1, W - MARGEM_SEGURA_X, card_y2],
         radius=24,
-        fill=(0, 0, 0, 210),
+        fill=(0, 0, 0, 115),
     )
 
     draw.rectangle(
