@@ -18,6 +18,7 @@ import json
 import re
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance
@@ -932,14 +933,33 @@ NOTICIAS_IMAGENS_DIR = BASE_DIR / "dados" / "imagens"
 NOTICIAS_STATUS_YOUTUBE_FILE = BASE_DIR / "dados" / "status" / "youtube.json"
 
 
+# Não pega a notícia mais recente publicada no vídeo principal —
+# com o Short rodando mais vezes/dia do que o vídeo principal, a
+# "mais recente" quase sempre ainda está fresquinha no canal, e o
+# fallback saía como duplicata visível lado a lado (mesmo título +
+# foto, só narração diferente). Damos um respiro (HORAS_RESPIRO)
+# antes de reaproveitar uma notícia, e limitamos o quanto pode ser
+# antiga (JANELA_MAXIMA_HORAS) pra não soar desatualizada.
+HORAS_RESPIRO_FALLBACK = 3
+JANELA_MAXIMA_HORAS_FALLBACK = 48
+
+
 def _ultima_noticia_publicada():
     """
-    Maior índice de notícia_N já publicado no vídeo longo, com
-    roteiro e imagem disponíveis pra reaproveitar no Short. O
-    áudio do vídeo longo (~50-70s) NÃO é reaproveitado — o
-    Short grava uma narração curta própria (ver
-    _texto_narracao_fallback), pra ficar na mesma faixa de
+    Escolhe uma notícia_N já publicada no vídeo longo (com
+    roteiro e imagem disponíveis) pra reaproveitar no Short de
+    fallback. O áudio do vídeo longo (~50-70s) NÃO é
+    reaproveitado — o Short grava uma narração curta própria
+    (ver _texto_narracao_fallback), pra ficar na mesma faixa de
     duração do Short de placar (20 a 30s).
+
+    Prefere a notícia MAIS ANTIGA dentro da janela de
+    JANELA_MAXIMA_HORAS_FALLBACK que já tenha pelo menos
+    HORAS_RESPIRO_FALLBACK desde a coleta — assim o Short não
+    fica com a mesma manchete que acabou de sair no vídeo
+    principal. Se não sobrar nenhuma candidata dentro desse
+    respiro, cai pra mais recente disponível mesmo assim (melhor
+    publicar duplicado do que não publicar nada nesse horário).
     """
 
     status_youtube = carregar_json(NOTICIAS_STATUS_YOUTUBE_FILE)
@@ -954,15 +974,54 @@ def _ultima_noticia_publicada():
         except ValueError:
             continue
 
-    for n in sorted(indices, reverse=True):
+    agora = datetime.now(timezone.utc)
+
+    candidatas = []
+
+    for n in sorted(indices):
 
         roteiro_path = NOTICIAS_ROTEIROS_DIR / f"noticia_{n}.json"
         imagem_path = NOTICIAS_IMAGENS_DIR / f"noticia_{n}.jpg"
 
-        if roteiro_path.exists() and imagem_path.exists():
+        if not (roteiro_path.exists() and imagem_path.exists()):
+            continue
+
+        if _noticia_ja_usada_no_fallback(n):
+            continue
+
+        candidatas.append((n, roteiro_path, imagem_path))
+
+    if not candidatas:
+        return None, None, None
+
+    def _idade_horas(roteiro_path):
+
+        try:
+
+            data_str = carregar_json(roteiro_path).get(
+                "noticia", {}
+            ).get("data")
+
+            data = datetime.fromisoformat(data_str)
+
+            return (agora - data).total_seconds() / 3600
+
+        except (TypeError, ValueError):
+
+            return 0
+
+    for n, roteiro_path, imagem_path in candidatas:
+
+        idade = _idade_horas(roteiro_path)
+
+        if HORAS_RESPIRO_FALLBACK <= idade <= JANELA_MAXIMA_HORAS_FALLBACK:
             return n, roteiro_path, imagem_path
 
-    return None, None, None
+    # Nenhuma dentro do respiro/janela — usa a mais recente
+    # disponível mesmo assim, pra não deixar o horário sem Short.
+    n, roteiro_path, imagem_path = candidatas[-1]
+
+    return n, roteiro_path, imagem_path
 
 
 def _noticia_ja_usada_no_fallback(indice_noticia):
