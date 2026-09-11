@@ -955,30 +955,51 @@ def _ultima_noticia_publicada():
 
     Prefere a notícia MAIS ANTIGA dentro da janela de
     JANELA_MAXIMA_HORAS_FALLBACK que já tenha pelo menos
-    HORAS_RESPIRO_FALLBACK desde a coleta — assim o Short não
-    fica com a mesma manchete que acabou de sair no vídeo
-    principal. Se não sobrar nenhuma candidata dentro desse
-    respiro, cai pra mais recente disponível mesmo assim (melhor
+    HORAS_RESPIRO_FALLBACK desde que foi PUBLICADA no vídeo
+    principal (campo "publicado_em" gravado por
+    enviar_youtube_video.py) — assim o Short não fica com a
+    mesma manchete que acabou de aparecer no canal. Notícias
+    publicadas antes desse campo existir não têm
+    "publicado_em" salvo; tratamos como idade infinita, que cai
+    fora da janela de 48h (na prática correto — são bem mais
+    antigas que isso mesmo) e só entram pelo último recurso
+    abaixo. Se não sobrar nenhuma candidata dentro do respiro,
+    cai pra mais recente disponível mesmo assim (melhor
     publicar duplicado do que não publicar nada nesse horário).
     """
 
     status_youtube = carregar_json(NOTICIAS_STATUS_YOUTUBE_FILE)
 
-    indices = []
+    agora = datetime.now(timezone.utc)
+
+    def _idade_horas(chave):
+
+        publicado_em = status_youtube.get(chave, {}).get(
+            "publicado_em"
+        )
+
+        if not publicado_em:
+            return float("inf")
+
+        try:
+
+            data = datetime.fromisoformat(publicado_em)
+
+            return (agora - data).total_seconds() / 3600
+
+        except (TypeError, ValueError):
+
+            return float("inf")
+
+    candidatas = []
 
     for chave in status_youtube:
 
         try:
-            indices.append(int(chave.split("_")[-1]))
+            n = int(chave.split("_")[-1])
 
         except ValueError:
             continue
-
-    agora = datetime.now(timezone.utc)
-
-    candidatas = []
-
-    for n in sorted(indices):
 
         roteiro_path = NOTICIAS_ROTEIROS_DIR / f"noticia_{n}.json"
         imagem_path = NOTICIAS_IMAGENS_DIR / f"noticia_{n}.jpg"
@@ -989,37 +1010,21 @@ def _ultima_noticia_publicada():
         if _noticia_ja_usada_no_fallback(n):
             continue
 
-        candidatas.append((n, roteiro_path, imagem_path))
+        candidatas.append((n, roteiro_path, imagem_path, _idade_horas(chave)))
 
     if not candidatas:
         return None, None, None
 
-    def _idade_horas(roteiro_path):
+    candidatas.sort(key=lambda c: c[0])
 
-        try:
-
-            data_str = carregar_json(roteiro_path).get(
-                "noticia", {}
-            ).get("data")
-
-            data = datetime.fromisoformat(data_str)
-
-            return (agora - data).total_seconds() / 3600
-
-        except (TypeError, ValueError):
-
-            return 0
-
-    for n, roteiro_path, imagem_path in candidatas:
-
-        idade = _idade_horas(roteiro_path)
+    for n, roteiro_path, imagem_path, idade in candidatas:
 
         if HORAS_RESPIRO_FALLBACK <= idade <= JANELA_MAXIMA_HORAS_FALLBACK:
             return n, roteiro_path, imagem_path
 
     # Nenhuma dentro do respiro/janela — usa a mais recente
     # disponível mesmo assim, pra não deixar o horário sem Short.
-    n, roteiro_path, imagem_path = candidatas[-1]
+    n, roteiro_path, imagem_path, _ = candidatas[-1]
 
     return n, roteiro_path, imagem_path
 
@@ -1361,10 +1366,21 @@ def gerar_fallback_de_noticia():
     dados_noticia = carregar_json(roteiro_path)
     roteiro_noticia = dados_noticia.get("roteiro", {})
 
+    # "titulo" no roteiro do vídeo principal já vem com o sufixo
+    # " #Shorts" (é o título usado pro upload do YouTube dele —
+    # ver salvar_roteiro() em gerar_roteiro.py). Usar esse campo
+    # aqui duplicava o "#Shorts" (inclusive narrado em voz alta
+    # pela TTS!) e as hashtags da descrição. "titulo_original" é
+    # a manchete limpa, sem sufixo nenhum.
     titulo = roteiro_noticia.get(
+        "titulo_original"
+    ) or roteiro_noticia.get(
         "titulo", "Notícia do futebol"
     )
-    descricao_base = roteiro_noticia.get("descricao", "")
+
+    if titulo.lower().endswith(" #shorts"):
+        titulo = titulo[: -len(" #Shorts")].rstrip()
+
     tags_base = roteiro_noticia.get("tags", [])
 
     preparar_diretorios()
@@ -1404,11 +1420,18 @@ def gerar_fallback_de_noticia():
 
         bloco_afiliado = bloco_descricao_afiliado(produto)
 
-        # Mesma ordem do Short de placar: afiliado primeiro,
-        # antes do corte de "mostrar mais" da descrição.
+        # Descrição montada do zero a partir do título LIMPO —
+        # não reaproveita a descrição do vídeo principal porque
+        # ela já vem com o próprio "#Shorts"/hashtags embutidos
+        # (ver gerar_descricao() em gerar_roteiro.py), o que
+        # duplicava tudo aqui. Mesma ordem do Short de placar:
+        # afiliado primeiro, antes do corte de "mostrar mais".
         descricao_youtube = (
             (f"{bloco_afiliado}\n\n" if bloco_afiliado else "")
-            + f"{descricao_base}\n\n"
+            + f"{titulo}. Confira os principais detalhes desta "
+            f"notícia no Noticias Show de Bola. Inscreva-se no "
+            f"canal para acompanhar as principais notícias do "
+            f"futebol.\n\n"
             + f"#Shorts #futebol #noticias"
         )
 

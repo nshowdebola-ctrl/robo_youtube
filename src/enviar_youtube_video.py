@@ -12,6 +12,7 @@ separado, pra não mexer em nada do pipeline de geração.
 
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 from youtube_upload import autenticar, enviar_video, gerado_hoje
@@ -171,6 +172,7 @@ def main():
         "status": "publicado",
         "video_id": video_id,
         "url": url,
+        "publicado_em": datetime.now(timezone.utc).isoformat(),
     }
 
     salvar_json(STATUS_YOUTUBE_FILE, status_youtube)
