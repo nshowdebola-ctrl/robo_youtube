@@ -6,10 +6,12 @@ NEWS-YOUTUBE — BUSCA DE RESULTADO PARA SHORTS
 Pipeline SEPARADA da principal (buscar_noticia.py). Roda junto,
 mas não compartilha arquivos/histórico com ela.
 
-1. Coleta e filtra notícias (mesmos filtros do pipeline principal).
-2. Fica só com notícias do tipo "resultado" (vitória/derrota/empate)
-   de um clube conhecido, excluindo categorias de base/amistoso.
-3. Rankeia por relevância e remove as já usadas (histórico próprio).
+1. Coleta e filtra notícias das últimas 12h (mesma janela do
+   pipeline principal).
+2. Fica só com notícias do tipo "resultado" (vitória/derrota/empate),
+   de qualquer clube, excluindo categorias de base/amistoso.
+3. Ordena da mais recente pra mais antiga e remove as já usadas
+   (histórico próprio).
 4. Pra cada candidata, tenta extrair time A, time B e placar —
    do corpo da matéria (o título quase nunca tem o placar).
 5. Gera o roteiro do Short pra primeira que der certo.
@@ -25,15 +27,14 @@ import sys
 
 from coletar_noticias import coletar_noticias
 from filtrar_noticias import (
-    filtrar_ultimas_24h,
+    filtrar_ultimas_12h,
     filtrar_conteudo_editorial,
     filtrar_apenas_futebol,
     remover_duplicadas,
 )
 from ranking_noticias import (
-    ranquear_noticias,
+    ordenar_por_recencia,
     normalizar_texto,
-    CLUBES_IMPORTANTES,
 )
 from gerar_roteiro import detectar_tipo, extrair_texto_materia
 from historico_resultados import (
@@ -69,36 +70,6 @@ def eh_categoria_excluida(titulo):
     return any(
         normalizar_texto(termo) in titulo_normalizado
         for termo in CATEGORIAS_EXCLUIDAS
-    )
-
-
-def tem_clube_importante(titulo):
-
-    titulo_normalizado = normalizar_texto(titulo)
-
-    return any(
-        normalizar_texto(clube) in titulo_normalizado
-        for clube in CLUBES_IMPORTANTES
-    )
-
-
-# Não mantemos uma lista de times da Série B (o elenco muda a
-# cada temporada por acesso/rebaixamento — arriscado de ficar
-# desatualizado). Em vez disso, identificamos pela própria
-# competição sendo citada na notícia.
-TERMOS_SERIE_B = [
-    "série b", "serie b", "segunda divisão", "segunda divisao",
-    "segundona",
-]
-
-
-def eh_serie_b(titulo):
-
-    titulo_normalizado = normalizar_texto(titulo)
-
-    return any(
-        normalizar_texto(termo) in titulo_normalizado
-        for termo in TERMOS_SERIE_B
     )
 
 
@@ -247,23 +218,24 @@ def detectar_competicao(texto):
     return ""
 
 
-def tentar_resultado(candidatas, historico, rotulo):
+def tentar_resultado(candidatas, historico):
     """
-    Tenta, em ordem de relevância, extrair um placar válido
-    e ainda não usado de uma lista de candidatas. Retorna
-    (noticia, resultado) ou (None, None).
+    Tenta, da notícia mais recente pra mais antiga, extrair um
+    placar válido e ainda não usado de uma lista de candidatas.
+    Retorna (noticia, resultado) ou (None, None).
     """
 
     if not candidatas:
         return None, None
 
-    ranking = ranquear_noticias(
+    ranking = ordenar_por_recencia(
         candidatas,
         limite=30,
     )
 
     print(
-        f"\n🔎 Tentando entre {len(ranking)} candidatas ({rotulo})..."
+        f"\n🔎 Tentando entre {len(ranking)} candidatas "
+        f"(mais recente primeiro)..."
     )
 
     for noticia in ranking:
@@ -327,12 +299,17 @@ def main():
         f"\n📥 Total coletado: {len(noticias)}"
     )
 
-    noticias = filtrar_ultimas_24h(noticias)
+    noticias = filtrar_ultimas_12h(noticias)
     noticias = filtrar_conteudo_editorial(noticias)
     noticias = filtrar_apenas_futebol(noticias)
     noticias = remover_duplicadas(noticias)
 
-    base = [
+    # Qualquer resultado de futebol (grande ou não) dentro da
+    # janela — não há mais uma lista fixa de "times grandes" indo
+    # primeiro: a mais recente sempre é tentada antes da mais
+    # antiga (ver ordenar_por_recencia), então nenhum jogo recente
+    # fica escondido atrás de um mais antigo só por causa do time.
+    candidatas = [
         n for n in noticias
         if detectar_tipo(n["titulo"]) in {
             "vitoria", "derrota", "empate",
@@ -340,29 +317,14 @@ def main():
         and not eh_categoria_excluida(n["titulo"])
     ]
 
-    candidatas_grandes = [
-        n for n in base
-        if tem_clube_importante(n["titulo"])
-    ]
-
-    candidatas_serie_b = [
-        n for n in base
-        if eh_serie_b(n["titulo"])
-        and not tem_clube_importante(n["titulo"])
-    ]
-
     print(
-        f"🏆 Candidatas de times grandes: {len(candidatas_grandes)}"
+        f"⚽ Candidatas de resultado nas últimas 12h: {len(candidatas)}"
     )
 
-    print(
-        f"🥈 Candidatas de Série B: {len(candidatas_serie_b)}"
-    )
-
-    if not candidatas_grandes and not candidatas_serie_b:
+    if not candidatas:
 
         print(
-            "⚠️ Nenhuma notícia de resultado nas últimas 24h."
+            "⚠️ Nenhuma notícia de resultado nas últimas 12h."
         )
 
         return 2
@@ -375,24 +337,10 @@ def main():
         f"🕘 Resultados já usados (histórico): {len(historico)}"
     )
 
-    # ------------------------------------------------------------
-    # Primeiro tenta times grandes; se não achar nenhum com
-    # placar identificável (ou já usados), cai pra Série B.
-    # ------------------------------------------------------------
-
     escolhida, resultado = tentar_resultado(
-        candidatas_grandes,
+        candidatas,
         historico,
-        "times grandes",
     )
-
-    if not resultado:
-
-        escolhida, resultado = tentar_resultado(
-            candidatas_serie_b,
-            historico,
-            "Série B",
-        )
 
     if not resultado:
 

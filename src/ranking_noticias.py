@@ -363,6 +363,45 @@ def ranquear_noticias(
 
 
 # ============================================================
+# ORDEM POR DATA (mais recente primeiro)
+# ============================================================
+
+def ordenar_por_recencia(
+    noticias,
+    limite=30
+):
+    """
+    Mesma limpeza de assunto repetido de ranquear_noticias(), mas
+    ordenando pela data da notícia (mais recente primeiro) em vez
+    de por pontuação de relevância.
+    """
+
+    print(
+        "\n🕘 Ordenando por data (mais recente primeiro)..."
+    )
+
+    noticias = sorted(
+        noticias,
+        key=lambda x: x.get("data"),
+        reverse=True
+    )
+
+    noticias = remover_assuntos_repetidos(
+        noticias
+    )
+
+    resultado = noticias[:limite]
+
+    print(
+        f"🏆 TOP {len(resultado)} notícias (mais recentes)"
+    )
+
+    return resultado
+
+    return resultado
+
+
+# ============================================================
 # MOSTRAR RANKING
 # ============================================================
 

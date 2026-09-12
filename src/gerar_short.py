@@ -35,6 +35,13 @@ from gerar_video import (
     baixar_imagem,
 )
 from gerar_roteiro import limitar_texto
+from historico_imagens import (
+    carregar_historico as carregar_historico_imagens,
+    limpar_expirados as limpar_imagens_expiradas,
+    ja_usada as imagem_ja_usada,
+    registrar_uso as registrar_uso_imagem,
+    salvar_historico as salvar_historico_imagens,
+)
 
 
 # ============================================================================
@@ -599,20 +606,38 @@ def procurar_imagem_short(resultado, indice):
         reverse=True,
     )
 
+    historico_imagens = limpar_imagens_expiradas(
+        carregar_historico_imagens()
+    )
+
     for item in candidatos[:20]:
 
         if item["pontuacao"] < 20:
+            continue
+
+        if imagem_ja_usada(item["url"], historico_imagens):
+
+            print(
+                f"   ⏭️ Já usada recentemente: {item['url']}"
+            )
+
             continue
 
         if baixar_imagem(item["url"], destino):
 
             print(f"   ✅ Imagem aceita: {item['url']}")
 
+            historico_imagens = registrar_uso_imagem(
+                item["url"], historico_imagens
+            )
+
+            salvar_historico_imagens(historico_imagens)
+
             return destino
 
     print(
-        "   ⚠️ Nenhuma foto relevante encontrada — "
-        "usando card só com o placar."
+        "   ⚠️ Nenhuma foto relevante (e ainda não usada "
+        "recentemente) encontrada — usando card só com o placar."
     )
 
     return None
