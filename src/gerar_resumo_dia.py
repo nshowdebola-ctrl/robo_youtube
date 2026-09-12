@@ -756,6 +756,13 @@ def gerar_descricao(edicao, data_str, capitulos):
         "notícias do futebol."
     )
     linhas.append("")
+    linhas.append(
+        "🛍️ Mais achadinhos: https://nshowdebola-ctrl.github.io"
+    )
+    linhas.append(
+        "📢 Telegram do canal: https://t.me/+A_pShcFvAcM1NDZh"
+    )
+    linhas.append("")
     linhas.append("#futebol #noticias #resumo")
 
     return "\n".join(linhas)

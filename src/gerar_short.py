@@ -85,6 +85,22 @@ MUSICA_FUNDO = (
 # competir com a voz.
 VOLUME_MUSICA = 0.12
 
+# ============================================================================
+# LINKS EXTRA NA DESCRIÇÃO (site de afiliado + Telegram, 2026-09-12)
+# ============================================================================
+
+SITE_ACHADINHOS = "https://nshowdebola-ctrl.github.io"
+LINK_TELEGRAM = "https://t.me/+A_pShcFvAcM1NDZh"
+
+
+def bloco_descricao_extra():
+
+    return (
+        f"🛍️ Mais achadinhos: {SITE_ACHADINHOS}\n"
+        f"📢 Telegram do canal: {LINK_TELEGRAM}"
+    )
+
+
 CREDITO_MUSICA = (
     "Música: \"News Room News\" por Spence "
     "(YouTube Audio Library)"
@@ -351,6 +367,7 @@ def montar_roteiro_short(resultado, indice):
         + f"{corpo} "
         f"Confira o resultado no Noticias Show de Bola. "
         f"Inscreva-se para acompanhar todos os resultados do dia.\n\n"
+        + f"{bloco_descricao_extra()}\n\n"
         + f"#Shorts #futebol #resultados\n\n"
         + f"🎵 {CREDITO_MUSICA}"
     )
@@ -1457,6 +1474,7 @@ def gerar_fallback_de_noticia():
             f"notícia no Noticias Show de Bola. Inscreva-se no "
             f"canal para acompanhar as principais notícias do "
             f"futebol.\n\n"
+            + f"{bloco_descricao_extra()}\n\n"
             + f"#Shorts #futebol #noticias"
         )
 

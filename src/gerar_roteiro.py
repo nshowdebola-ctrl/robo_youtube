@@ -853,6 +853,12 @@ def gerar_titulo_youtube(
 # GERAR DESCRIÇÃO
 # ============================================================
 
+# Site de afiliado ("Achadinhos da Web") e canal do Telegram do
+# canal, adicionados na descrição a pedido do usuário em 2026-09-12.
+SITE_ACHADINHOS = "https://nshowdebola-ctrl.github.io"
+LINK_TELEGRAM = "https://t.me/+A_pShcFvAcM1NDZh"
+
+
 def gerar_descricao(
     titulo,
     texto,
@@ -868,6 +874,8 @@ def gerar_descricao(
         f"notícia no Noticias Show de Bola. "
         f"Inscreva-se no canal para acompanhar "
         f"as principais notícias do futebol.\n\n"
+        f"🛍️ Mais achadinhos: {SITE_ACHADINHOS}\n"
+        f"📢 Telegram do canal: {LINK_TELEGRAM}\n\n"
         f"#Shorts #futebol #noticias"
     )
 
