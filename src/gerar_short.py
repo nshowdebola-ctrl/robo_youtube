@@ -958,6 +958,164 @@ def gerar_video_short(resultado, indice, arquivo_audio, arquivo_imagem):
 
 
 # ============================================================================
+# CARTELA FINAL — site + Telegram (teste piloto 2026-09-13, só no
+# Short de placar por enquanto, mesmo padrão da trilha de fundo:
+# testar num pipeline só antes de espalhar pros outros 3 formatos).
+# ============================================================================
+
+DURACAO_CTA_FINAL = 2.5
+
+
+def preparar_frame_cta_final(indice):
+
+    imagem = Image.new("RGB", (W, H), (6, 9, 14))
+
+    draw = ImageDraw.Draw(imagem, "RGBA")
+
+    # Mesmo cabeçalho e rodapé do card de placar, pra manter a
+    # identidade visual do canal entre os dois frames do vídeo.
+    draw.rectangle([0, 0, W, 190], fill=(3, 8, 14, 255))
+    draw.rectangle([0, 185, W, 190], fill=(233, 39, 39, 255))
+
+    fonte_logo = ImageFont.truetype(str(FONT_BOLD), 40)
+
+    draw.text(
+        (MARGEM_SEGURA_X, MARGEM_SEGURA_Y),
+        "NOTICIAS SHOW DE BOLA",
+        font=fonte_logo,
+        fill=(255, 255, 255, 255),
+    )
+
+    fonte_titulo = ImageFont.truetype(str(FONT_BOLD), 52)
+    fonte_badge = ImageFont.truetype(str(FONT_BOLD), 34)
+
+    def texto_centralizado(texto, fonte, y):
+
+        caixa = draw.textbbox((0, 0), texto, font=fonte)
+        largura_texto = caixa[2] - caixa[0]
+        x = (W - largura_texto) // 2
+
+        draw.text(
+            (x, y),
+            texto,
+            font=fonte,
+            fill=(255, 255, 255, 255),
+            stroke_width=3,
+            stroke_fill=(0, 0, 0, 255),
+        )
+
+    texto_centralizado("LINKS NA DESCRIÇÃO", fonte_titulo, 640)
+
+    def badge(y1, y2, texto):
+
+        draw.rounded_rectangle(
+            [MARGEM_SEGURA_X, y1, W - MARGEM_SEGURA_X, y2],
+            radius=24,
+            fill=(233, 39, 39, 60),
+        )
+
+        draw.rounded_rectangle(
+            [MARGEM_SEGURA_X, y1, W - MARGEM_SEGURA_X, y2],
+            radius=24,
+            outline=(233, 39, 39, 255),
+            width=3,
+        )
+
+        texto_centralizado(texto, fonte_badge, y1 + 34)
+
+    badge(800, 920, "🛍️ SITE DE OFERTAS")
+    badge(970, 1090, "📢 CANAL NO TELEGRAM")
+
+    draw.rectangle([0, H - 110, W, H], fill=(3, 7, 11, 245))
+    draw.rectangle([0, H - 110, W, H - 105], fill=(233, 39, 39, 255))
+
+    fonte_rodape = ImageFont.truetype(str(FONT_NORMAL), 26)
+
+    draw.text(
+        (MARGEM_SEGURA_X, H - 80),
+        "NEWS YOUTUBE • FUTEBOL • RESULTADOS",
+        font=fonte_rodape,
+        fill=(255, 255, 255, 255),
+    )
+
+    destino = IMAGENS_DIR / f"resultado_{indice}_cta.jpg"
+
+    imagem.convert("RGB").save(
+        destino,
+        "JPEG",
+        quality=95,
+        optimize=True,
+    )
+
+    return destino
+
+
+def anexar_cartela_final(video_path, indice):
+    """
+    Acrescenta DURACAO_CTA_FINAL segundos de um card estático
+    (site + Telegram) no final do vídeo já pronto, sem narração
+    (só o som ambiente permanece em silêncio). Reencoda os dois
+    trechos juntos (concat filter) em vez de stream copy, pra não
+    depender dos dois arquivos terem exatamente os mesmos
+    parâmetros de áudio/vídeo.
+    """
+
+    video_path = Path(video_path)
+
+    frame_cta = preparar_frame_cta_final(indice)
+
+    destino_temp = video_path.with_suffix(".comcta.mp4")
+
+    comando = [
+        "ffmpeg", "-y",
+        "-i", str(video_path),
+        "-loop", "1",
+        "-framerate", str(FPS),
+        "-t", f"{DURACAO_CTA_FINAL}",
+        "-i", str(frame_cta),
+        "-f", "lavfi",
+        "-t", f"{DURACAO_CTA_FINAL}",
+        "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
+        "-filter_complex",
+        "[0:v]format=yuv420p[mainv];"
+        "[0:a]aformat=sample_rates=44100:channel_layouts=stereo[maina];"
+        "[1:v]scale=1080:1920,format=yuv420p[ctav];"
+        "[2:a]aformat=sample_rates=44100:channel_layouts=stereo[ctaa];"
+        "[mainv][maina][ctav][ctaa]concat=n=2:v=1:a=1[vout][aout]",
+        "-map", "[vout]",
+        "-map", "[aout]",
+        "-c:v", "libx264",
+        "-preset", "veryfast",
+        "-crf", "21",
+        "-pix_fmt", "yuv420p",
+        "-c:a", "aac",
+        "-b:a", "192k",
+        "-ar", "44100",
+        "-movflags", "+faststart",
+        str(destino_temp),
+    ]
+
+    resultado_ffmpeg = subprocess.run(
+        comando,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+
+    if resultado_ffmpeg.returncode != 0:
+
+        print(resultado_ffmpeg.stderr[-4000:])
+
+        raise RuntimeError("FFmpeg falhou ao anexar a cartela final.")
+
+    destino_temp.replace(video_path)
+
+    print(f"✅ Cartela final (site + Telegram) anexada: {video_path}")
+
+    return video_path
+
+
+# ============================================================================
 # FALLBACK — SHORT A PARTIR DA NOTÍCIA DO VÍDEO LONGO
 #
 # Quando não há resultado de jogo com placar identificável, em vez de
@@ -1570,12 +1728,14 @@ def processar(repetir_erros=False):
 
         arquivo_imagem = procurar_imagem_short(resultado, indice)
 
-        gerar_video_short(
+        video_path = gerar_video_short(
             resultado,
             indice,
             arquivo_audio,
             arquivo_imagem,
         )
+
+        anexar_cartela_final(video_path, indice)
 
         atualizar_status(indice, "concluido")
 
