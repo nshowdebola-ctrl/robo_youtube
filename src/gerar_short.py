@@ -965,6 +965,13 @@ def gerar_video_short(resultado, indice, arquivo_audio, arquivo_imagem):
 
 DURACAO_CTA_FINAL = 2.5
 
+# Arte pronta (Amazon + Shopee + botão "Entre no nosso Telegram")
+# fornecida pelo usuário em 2026-09-13 — já cobre a mensagem toda,
+# não precisa de texto extra por cima.
+IMAGEM_CTA_FINAL = (
+    BASE_DIR / "assets" / "imagens" / "achadinhos_da_web.png"
+)
+
 
 def preparar_frame_cta_final(indice):
 
@@ -986,45 +993,42 @@ def preparar_frame_cta_final(indice):
         fill=(255, 255, 255, 255),
     )
 
-    fonte_titulo = ImageFont.truetype(str(FONT_BOLD), 52)
-    fonte_badge = ImageFont.truetype(str(FONT_BOLD), 34)
+    if IMAGEM_CTA_FINAL.exists():
 
-    def texto_centralizado(texto, fonte, y):
+        arte = Image.open(IMAGEM_CTA_FINAL).convert("RGB")
 
-        caixa = draw.textbbox((0, 0), texto, font=fonte)
+        largura_alvo = W - 2 * MARGEM_SEGURA_X
+        proporcao = largura_alvo / arte.width
+
+        arte = arte.resize(
+            (largura_alvo, int(arte.height * proporcao)),
+            Image.Resampling.LANCZOS,
+        )
+
+        area_y1 = 210
+        area_y2 = H - 130
+        y = area_y1 + (area_y2 - area_y1 - arte.height) // 2
+
+        imagem.paste(arte, (MARGEM_SEGURA_X, y))
+
+    else:
+
+        # Fallback de texto, caso o arquivo da arte suma um dia.
+        fonte_titulo = ImageFont.truetype(str(FONT_BOLD), 52)
+
+        caixa = draw.textbbox(
+            (0, 0), "LINKS NA DESCRIÇÃO", font=fonte_titulo
+        )
         largura_texto = caixa[2] - caixa[0]
-        x = (W - largura_texto) // 2
 
         draw.text(
-            (x, y),
-            texto,
-            font=fonte,
+            ((W - largura_texto) // 2, 900),
+            "LINKS NA DESCRIÇÃO",
+            font=fonte_titulo,
             fill=(255, 255, 255, 255),
             stroke_width=3,
             stroke_fill=(0, 0, 0, 255),
         )
-
-    texto_centralizado("LINKS NA DESCRIÇÃO", fonte_titulo, 640)
-
-    def badge(y1, y2, texto):
-
-        draw.rounded_rectangle(
-            [MARGEM_SEGURA_X, y1, W - MARGEM_SEGURA_X, y2],
-            radius=24,
-            fill=(233, 39, 39, 60),
-        )
-
-        draw.rounded_rectangle(
-            [MARGEM_SEGURA_X, y1, W - MARGEM_SEGURA_X, y2],
-            radius=24,
-            outline=(233, 39, 39, 255),
-            width=3,
-        )
-
-        texto_centralizado(texto, fonte_badge, y1 + 34)
-
-    badge(800, 920, "🛍️ SITE DE OFERTAS")
-    badge(970, 1090, "📢 CANAL NO TELEGRAM")
 
     draw.rectangle([0, H - 110, W, H], fill=(3, 7, 11, 245))
     draw.rectangle([0, H - 110, W, H - 105], fill=(233, 39, 39, 255))
