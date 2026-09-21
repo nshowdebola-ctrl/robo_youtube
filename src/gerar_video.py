@@ -475,11 +475,15 @@ async def obter_voz_valida():
 async def gerar_audio_async(
     texto,
     destino,
+    voz=None,
 ):
 
     edge_tts = importar_edge_tts()
 
-    voz = await obter_voz_valida()
+    # "voz" opcional (ex.: Shorts alternam voz feminina/masculina);
+    # se não vier ou não existir mais no Edge TTS, cai na padrão.
+    if not voz:
+        voz = await obter_voz_valida()
 
     print()
     print("🎙️ GERANDO NARRAÇÃO")
@@ -526,12 +530,14 @@ async def gerar_audio_async(
 def gerar_audio(
     texto,
     destino,
+    voz=None,
 ):
 
     asyncio.run(
         gerar_audio_async(
             texto,
             destino,
+            voz,
         )
     )
 

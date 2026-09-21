@@ -101,6 +101,37 @@ def bloco_descricao_extra():
     )
 
 
+# ============================================================================
+# VARIAÇÃO DE ROTEIRO E VOZ (2026-09-20) — roteiro estava muito
+# padrão. Frases alternativas + voz alternada (feminina/masculina),
+# escolhidas pelo índice do Short (reproduzível: mesmo índice,
+# mesmo resultado).
+# ============================================================================
+
+VOZES_SHORT = [
+    "pt-BR-FranciscaNeural",
+    "pt-BR-AntonioNeural",
+    "pt-BR-ThalitaMultilingualNeural",
+]
+
+FRASES_LINK_CANAL = [
+    "Mais achadinhos no link do nosso canal! Corre lá!",
+    "Quer mais achadinhos? Corre no link do nosso canal!",
+    "Tem mais achadinhos esperando por você no link do canal!",
+]
+
+
+def voz_do_short(indice):
+
+    return VOZES_SHORT[indice % len(VOZES_SHORT)]
+
+
+def escolher(indice, opcoes, deslocamento=0):
+    """Escolhe uma frase por índice (varia de Short pra Short)."""
+
+    return opcoes[(indice + deslocamento) % len(opcoes)]
+
+
 CREDITO_MUSICA = (
     "Música: \"News Room News\" por Spence "
     "(YouTube Audio Library)"
@@ -294,7 +325,12 @@ def montar_roteiro_short(resultado, indice):
     placar_b = int(resultado["placar_b"])
     competicao = resultado.get("competicao", "")
 
-    abertura = "Mais um resultado do futebol brasileiro."
+    abertura = escolher(indice, [
+        "Olha o placar que acabou de sair!",
+        "Fim de papo! Confira como terminou.",
+        "Atenção, torcedor! O resultado chegou.",
+        "Bola parou de rolar, e o placar é esse!",
+    ])
 
     corpo = (
         f"{time_a} {placar_a} x {placar_b} {time_b}"
@@ -304,45 +340,56 @@ def montar_roteiro_short(resultado, indice):
 
     if placar_a > placar_b:
 
-        desenvolvimento = (
-            f"O {time_a} leva a melhor sobre o {time_b} "
-            f"nessa partida."
-        )
+        desenvolvimento = escolher(indice, [
+            f"Deu {time_a}! Vitória sobre o {time_b}.",
+            f"O {time_a} não tomou conhecimento e venceu o {time_b}!",
+            f"Três pontos pro {time_a}, que superou o {time_b}!",
+        ], 1)
 
     elif placar_b > placar_a:
 
-        desenvolvimento = (
-            f"O {time_b} leva a melhor sobre o {time_a} "
-            f"nessa partida."
-        )
+        desenvolvimento = escolher(indice, [
+            f"Deu {time_b}! Vitória sobre o {time_a}.",
+            f"O {time_b} não tomou conhecimento e venceu o {time_a}!",
+            f"Três pontos pro {time_b}, que superou o {time_a}!",
+        ], 1)
 
     else:
 
-        desenvolvimento = (
-            f"{time_a} e {time_b} não saíram do empate "
-            f"nessa partida."
-        )
+        desenvolvimento = escolher(indice, [
+            f"Ninguém saiu na frente: {time_a} e {time_b} empataram!",
+            f"Tudo igual! {time_a} e {time_b} dividiram os pontos.",
+            f"Sem vencedor: {time_a} e {time_b} ficaram no empate!",
+        ], 1)
 
-    contexto = (
+    contexto = escolher(indice, [
         "O resultado pode pesar na tabela e já repercute "
-        "entre os torcedores das duas equipes."
-    )
+        "entre os torcedores das duas equipes.",
+        "Na tabela, cada ponto conta, e esse resultado "
+        "deve render conversa entre os torcedores.",
+        "O placar mexe com a classificação e deixa a torcida "
+        "das duas equipes falando no assunto.",
+    ], 2)
 
-    fechamento = (
+    fechamento = escolher(indice, [
         "Inscreva-se e acesse o canal para ver mais "
-        "conteúdos como este."
-    )
+        "conteúdos como este.",
+        "Gostou? Então se inscreve e não perde nenhum placar!",
+        "Se inscreva no canal e fique por dentro de tudo do futebol!",
+    ], 3)
 
     produto = produto_afiliado(indice)
     mencao_afiliado = frase_narracao_afiliado(produto)
+    frase_link = escolher(indice, FRASES_LINK_CANAL)
 
     # O placar (corpo) vem PRIMEIRO — gancho dos 2 primeiros
     # segundos, o trecho que mais pesa na retenção do Short. A
-    # frase de aquecimento genérica passou pra depois.
+    # frase de aquecimento genérica passou pra depois. O convite
+    # ao link do canal fecha o roteiro.
     texto = " ".join(
         parte for parte in (
             corpo, abertura, desenvolvimento, contexto,
-            fechamento, mencao_afiliado,
+            fechamento, mencao_afiliado, frase_link,
         ) if parte
     )
 
@@ -1430,7 +1477,7 @@ MIN_CHARS_FALLBACK = 288
 MAX_CHARS_FALLBACK = 470
 
 
-def _texto_narracao_fallback(titulo, produto):
+def _texto_narracao_fallback(titulo, produto, indice):
     """
     Narração curta e genérica pro Short de fallback — só usa o
     título (fato/manchete, sem problema de direitos autorais),
@@ -1441,24 +1488,46 @@ def _texto_narracao_fallback(titulo, produto):
     """
 
     # Título (o fato) vem PRIMEIRO — mesmo ajuste de gancho do
-    # fallback_roteiro() no vídeo longo, a frase de aquecimento
-    # genérica passou pra depois.
-    texto = (
+    # fallback_roteiro() no vídeo longo. O miolo é variado por
+    # índice e limitado ANTES de juntar o encerramento, pra o
+    # corte de tamanho nunca comer a menção ao afiliado nem o
+    # convite ao link do canal.
+    miolo = (
         f"{titulo}. "
-        f"Mais uma notícia do futebol brasileiro. "
-        f"Esse assunto tem repercutido bastante entre "
-        f"torcedores e deve continuar rendendo comentário "
-        f"nas próximas horas. "
-        f"Fique de olho nas atualizações, porque coisas "
-        f"assim costumam mudar rápido no mundo da bola. "
-        f"{FRASE_ENCERRAMENTO_FALLBACK} "
-        f"{frase_narracao_afiliado(produto)}"
+        + escolher(indice, [
+            "Essa notícia está movimentando o futebol brasileiro. "
+            "Esse assunto tem repercutido bastante entre "
+            "torcedores e deve continuar rendendo comentário "
+            "nas próximas horas. "
+            "Fique de olho nas atualizações, porque coisas "
+            "assim costumam mudar rápido no mundo da bola.",
+            "Prepare-se: esse é o assunto do momento no futebol! "
+            "A torcida já está comentando e a tendência é que "
+            "surjam novidades em breve. "
+            "Vale acompanhar, porque no mundo da bola tudo "
+            "muda muito rápido.",
+            "Olha só o que está bombando no mundo da bola! "
+            "Entre os torcedores, a repercussão só cresce. "
+            "Ainda deve ter capítulo novo nessa história, "
+            "então fique ligado.",
+        ])
     )
 
-    return limitar_texto(
-        texto,
-        MIN_CHARS_FALLBACK,
-        MAX_CHARS_FALLBACK,
+    miolo = limitar_texto(miolo, MIN_CHARS_FALLBACK - 120, MAX_CHARS_FALLBACK - 150)
+
+    encerramento = escolher(indice, [
+        FRASE_ENCERRAMENTO_FALLBACK,
+        "Gostou? Então se inscreve e não perde a próxima!",
+        "Se inscreva no canal e fique por dentro de tudo do futebol!",
+    ], 3)
+
+    return " ".join(
+        parte for parte in (
+            miolo,
+            encerramento,
+            frase_narracao_afiliado(produto),
+            escolher(indice, FRASES_LINK_CANAL),
+        ) if parte
     )
 
 
@@ -1610,11 +1679,11 @@ def gerar_fallback_de_noticia():
 
         produto = produto_afiliado(indice)
 
-        texto_narracao = _texto_narracao_fallback(titulo, produto)
+        texto_narracao = _texto_narracao_fallback(titulo, produto, indice)
 
         audio_path = AUDIOS_DIR / f"resultado_{indice}.mp3"
 
-        gerar_audio(texto_narracao, audio_path)
+        gerar_audio(texto_narracao, audio_path, voz_do_short(indice))
 
         gerar_video_noticia_short(
             frame, indice, audio_path
@@ -1728,7 +1797,7 @@ def processar(repetir_erros=False):
 
         arquivo_audio = AUDIOS_DIR / f"resultado_{indice}.mp3"
 
-        gerar_audio(texto, arquivo_audio)
+        gerar_audio(texto, arquivo_audio, voz_do_short(indice))
 
         arquivo_imagem = procurar_imagem_short(resultado, indice)
 
